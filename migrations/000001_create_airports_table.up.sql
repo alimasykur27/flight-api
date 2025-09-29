@@ -2,15 +2,15 @@
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_type WHERE typname = 'facility_type') THEN
-        CREATE TYPE facility_type AS ENUM ('AIRPORT','HELIPORT');
+        CREATE TYPE facility_type AS ENUM ('airport','heliport');
     END IF;
 
     IF NOT EXISTS (SELECT FROM pg_type WHERE typname = 'ownership_type') THEN
-        CREATE TYPE ownership_type AS ENUM ('PU','PR');
+        CREATE TYPE ownership_type AS ENUM ('public','private');
     END IF;
 
     IF NOT EXISTS (SELECT FROM pg_type WHERE typname = 'use_type') THEN
-        CREATE TYPE use_type AS ENUM ('PU','PR');
+        CREATE TYPE use_type AS ENUM ('public','private');
     END IF;
 END
 $$ LANGUAGE plpgsql;
@@ -25,22 +25,22 @@ CREATE TABLE public.airports (
     faa_id                      VARCHAR(10)  UNIQUE,
     iata_id                     VARCHAR(10)  UNIQUE,
     name                        VARCHAR(255),
-    type                        facility_type,                               -- 'AIRPORT'/'HELIPORT'
+    type                        facility_type,                               -- 'airport'/'heliport'
     status                      BOOLEAN,                                     -- true=open (O), false=closed (C)
     country                     VARCHAR(64),
     state                       VARCHAR(10),
     state_full                  VARCHAR(64),
     county                      VARCHAR(64),
     city                        VARCHAR(64),
-    ownership                   ownership_type,                              -- 'PU'/'PR'
-    "use"                       use_type,                                    -- 'PU'/'PR' (pakai quotes karena keyword)
+    ownership                   ownership_type,                              -- 'public' or'private'
+    "use"                       use_type,                                    -- 'public' or 'private'
     manager                     VARCHAR(255),
-    manager_phone               VARCHAR(32),                                 -- bisa mengandung dash/alfanumerik
+    manager_phone               VARCHAR(32),
     latitude                    VARCHAR(64),                                 -- "35-26-04.0000N"
     latitude_sec                VARCHAR(64),                                 -- "127564.0000N"
     longitude                   VARCHAR(64),                                 -- "082-32-33.8240W"
     longitude_sec               VARCHAR(64),                                 -- "297153.8240W"
-    elevation                   INTEGER,                                     -- akan diformat string di VIEW
+    elevation                   INTEGER,
     magnetic_variation          VARCHAR(16),
     tpa                         INTEGER,
     vfr_sectional               VARCHAR(64),
