@@ -1,0 +1,19 @@
+# Go build output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Vendor directory (if not needed in image)
+vendor/
+
+# Binaries
+/app/flight-api
+/app/migrate
+
+# Environment files
+.env
+.env.*

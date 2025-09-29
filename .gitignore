@@ -1,1 +1,17 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+flight-api
+
+# Environment variables
 .env
+.env.local
+.env.production
+
+# Other
+*.log
+logs/
