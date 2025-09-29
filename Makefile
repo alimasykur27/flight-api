@@ -8,11 +8,10 @@ all: build
 
 # Build the application
 build:
-    mkdir -p $(BINARY_DIR) && \
-    go build -o $(BINARY_DIR)/$(BINARY_NAME) $(MAIN_PATH) && \
-    echo "Server binary built in ./bin:" && \
-    ls -lh $(BINARY_DIR)/
-
+	mkdir -p $(BINARY_DIR) && \
+	go build -o $(BINARY_DIR)/$(BINARY_NAME) $(MAIN_PATH) && \
+	echo "Server binary built in ./bin:" && \
+	ls -lh $(BINARY_DIR)
 
 # Run the application
 run:
@@ -21,8 +20,8 @@ run:
 # Clean build artifacts
 clean:
 	go clean
-	rm -f $(BINARY_NAME)
-	rm -f coverage.out
+	rm -f ${BINARY_DIR}/$(BINARY_NAME)
+	rm -f ${BINARY_DIR}/coverage.out
 
 # Run tests
 test:
@@ -30,8 +29,8 @@ test:
 
 # Run tests with coverage
 test-coverage:
-	go test ./... -coverprofile=coverage.out
-	go tool cover -html=coverage.out
+	go test ./... -coverprofile=${BINARY_DIR}/coverage.out
+	go tool cover -html=${BINARY_DIR}/coverage.out
 
 # Build Docker image
 docker-build:
