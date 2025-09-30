@@ -20,10 +20,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE public.airports (
     id                          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    site_number                 VARCHAR(255) UNIQUE,                         -- FAA site number
-    icao_id                     VARCHAR(10)  NOT NULL UNIQUE,
-    faa_id                      VARCHAR(10)  UNIQUE,
-    iata_id                     VARCHAR(10)  UNIQUE,
+    site_number                 VARCHAR(255),                         -- FAA site number
+    icao_id                     VARCHAR(10) NOT NULL,
+    faa_id                      VARCHAR(10),
+    iata_id                     VARCHAR(10),
     name                        VARCHAR(255),
     type                        facility_type,                               -- 'airport'/'heliport'
     status                      BOOLEAN,                                     -- true=open (O), false=closed (C)
@@ -45,24 +45,16 @@ CREATE TABLE public.airports (
     tpa                         INTEGER,
     vfr_sectional               VARCHAR(64),
     district_office             VARCHAR(16),                                 -- FSDO (ex: MEM)
-    boundary_artcc              VARCHAR(8),
-    boundary_artcc_name         VARCHAR(64),
-    responsible_artcc           VARCHAR(8),
-    responsible_artcc_name      VARCHAR(64),
-    fss_phone_number            VARCHAR(32),
-    fss_phone_number_tollfree   VARCHAR(32),
     notam_facility_ident        VARCHAR(16),
     certification_typedate      VARCHAR(64),
     customs_airport_of_entry    BOOLEAN,                                     -- true->'Y'
     military_join_use           BOOLEAN,
     military_landing            BOOLEAN,
-    lighting_schedule           VARCHAR(64),
-    beacon_schedule             VARCHAR(64),
     control_tower               BOOLEAN,
     unicom                      VARCHAR(64),
     ctaf                        VARCHAR(64),
     effective_date              DATE,
-    sync_status                 BOOLEAN,
+    sync_status                 BOOLEAN NOT NULL DEFAULT FALSE,
     created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

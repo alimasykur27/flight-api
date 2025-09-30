@@ -8,6 +8,8 @@ import (
 )
 
 const INFO_DEBUG_LEVEL string = "info"
+const DEBUG_LEVEL string = "debug"
+const TRACE_LEVEL string = "trace"
 
 type Logger struct {
 	logger *logrus.Logger
@@ -65,31 +67,59 @@ func (l *Logger) GetLogger() *logrus.Logger {
 	return l.logger
 }
 
-func (l *Logger) Trace(msg string, args ...interface{}) {
+func (l *Logger) Trace(args ...interface{}) {
+	l.logger.Trace(args...)
+}
+
+func (l *Logger) Debug(args ...interface{}) {
+	l.logger.Debug(args...)
+}
+
+func (l *Logger) Info(args ...interface{}) {
+	l.logger.Info(args...)
+}
+
+func (l *Logger) Warn(args ...interface{}) {
+	l.logger.Warn(args...)
+}
+
+func (l *Logger) Error(args ...interface{}) {
+	l.logger.Error(args...)
+}
+
+func (l *Logger) Fatal(args ...interface{}) {
+	l.logger.Fatal(args...)
+}
+
+func (l *Logger) Panic(args ...interface{}) {
+	l.logger.Panic(args...)
+}
+
+func (l *Logger) Tracef(msg string, args ...interface{}) {
 	l.logger.Tracef(msg, args...)
 }
 
-func (l *Logger) Debug(msg string, args ...interface{}) {
+func (l *Logger) Debugf(msg string, args ...interface{}) {
 	l.logger.Debugf(msg, args...)
 }
 
-func (l *Logger) Info(msg string, args ...interface{}) {
+func (l *Logger) Infof(msg string, args ...interface{}) {
 	l.logger.Infof(msg, args...)
 }
 
-func (l *Logger) Warn(msg string, args ...interface{}) {
+func (l *Logger) Warnf(msg string, args ...interface{}) {
 	l.logger.Warnf(msg, args...)
 }
 
-func (l *Logger) Error(msg string, args ...interface{}) {
+func (l *Logger) Errorf(msg string, args ...interface{}) {
 	l.logger.Errorf(msg, args...)
 }
 
-func (l *Logger) Fatal(msg string, args ...interface{}) {
+func (l *Logger) Fatalf(msg string, args ...interface{}) {
 	l.logger.Fatalf(msg, args...)
 }
 
-func (l *Logger) Panic(msg string, args ...interface{}) {
+func (l *Logger) Panicf(msg string, args ...interface{}) {
 	l.logger.Panicf(msg, args...)
 }
 

@@ -30,7 +30,7 @@ func HTTPLogger(next http.Handler) http.Handler {
 		logger.WithFields(
 			logrus.Fields{
 				"method":      r.Method,
-				"path":        r.URL.RawPath,
+				"path":        r.URL,
 				"status":      ww.status,
 				"duration":    time.Since(start),
 				"remote_addr": r.RemoteAddr,

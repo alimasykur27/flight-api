@@ -21,6 +21,7 @@ func NewRouter(handlers ...Handler) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware
+	logger.Info("Setup Middleware ...")
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(mid.HTTPLogger)
@@ -32,13 +33,14 @@ func NewRouter(handlers ...Handler) *chi.Mux {
 	r.Use(middleware.SetHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"))
 	r.Use(middleware.SetHeader("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token"))
 	r.Use(middleware.SetHeader("Access-Control-Allow-Credentials", "true"))
+
 	// Handle OPTIONS requests
-	r.Options("/*", func(w http.ResponseWriter, r *http.Request) {
+	r.Options("/v1/*", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	// Health check endpoint
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
