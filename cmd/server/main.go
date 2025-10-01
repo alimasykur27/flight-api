@@ -4,8 +4,10 @@ import (
 	"context"
 	"flight-api/config"
 	"flight-api/internal/handler"
-	"flight-api/internal/repository"
-	"flight-api/internal/service"
+	repo_airport "flight-api/internal/repository/airport"
+	service_airport "flight-api/internal/service/airport"
+	service_aviation "flight-api/internal/service/aviation"
+	service_sync "flight-api/internal/service/sync"
 	"flight-api/pkg/database"
 	"flight-api/pkg/httpserver"
 	"flight-api/pkg/logger"
@@ -31,6 +33,8 @@ func main() {
 		logger.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	logger.SetLogLevel(cfg.LogLevel)
+
 	// Connect to database
 	logger.Info("Connecting to database ...")
 	db, err := database.Connect(cfg.DatabaseURL)
@@ -47,14 +51,16 @@ func main() {
 	validate := util.NewValidator()
 
 	// Initialize repository
-	airportRepository := repository.NewAirportRepository(logger)
+	airportRepository := repo_airport.NewAirportRepository(logger)
 
 	// Initialize service
-	airportService := service.NewAirportService(airportRepository, db, validate, logger)
+	airportService := service_airport.NewAirportService(logger, validate, db, airportRepository)
+	aviationService := service_aviation.NewAviationService(logger, &cfg)
+	syncService := service_sync.NewSyncService(logger, validate, &cfg, db, airportRepository, aviationService)
 
 	// Initialize Handlers
 	airportHandler := handler.NewAirportHandler(airportService, logger)
-	syncHandler := handler.NewSyncHandler(logger)
+	syncHandler := handler.NewSyncHandler(syncService, logger)
 
 	// Setup router
 	logger.Info("Setup Router ...")

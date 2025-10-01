@@ -4,7 +4,7 @@ import (
 	airport_dto "flight-api/internal/dto/airport"
 	queryparams "flight-api/internal/dto/query_params"
 	response_dto "flight-api/internal/dto/response"
-	"flight-api/internal/service"
+	service_airport "flight-api/internal/service/airport"
 	"flight-api/pkg/logger"
 	"flight-api/util"
 	"fmt"
@@ -14,12 +14,12 @@ import (
 )
 
 type AirportHandler struct {
-	airportService service.IAirportService
+	airportService service_airport.IAirportService
 	logger         *logger.Logger
 }
 
 // NewAirportHandler
-func NewAirportHandler(service service.IAirportService, logger *logger.Logger) IAirportHandler {
+func NewAirportHandler(service service_airport.IAirportService, logger *logger.Logger) IAirportHandler {
 	return &AirportHandler{
 		airportService: service,
 		logger:         logger,
@@ -45,8 +45,6 @@ func (h *AirportHandler) RegisterRouter(r chi.Router) {
 func (h *AirportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	airportReq := airport_dto.AirportRequestDto{}
 	util.ReadFromRequestBody(r, &airportReq)
-
-	h.logger.Info(airportReq)
 
 	airportResponse := h.airportService.Create(r.Context(), airportReq)
 	response := response_dto.ResponseDto{
@@ -190,7 +188,7 @@ func (h *AirportHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.logger.Info(fmt.Sprintf("Airport with ID %s deleted successfully", id))
+	h.logger.Debugf("Airport with ID %s deleted successfully", id)
 
 	response := response_dto.ResponseDto{
 		Code:    http.StatusOK,

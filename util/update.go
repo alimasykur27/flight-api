@@ -1,49 +1,62 @@
 package util
 
-import "reflect"
+import (
+	"database/sql"
+	"time"
+)
 
-func ApplyUpdates[T any](original *T, updates T) {
-	// Use reflection to iterate over the fields of the struct
-	origValue := reflect.ValueOf(original).Elem()
-	updateValue := reflect.ValueOf(updates)
-
-	for i := 0; i < origValue.NumField(); i++ {
-		field := origValue.Field(i)
-		updateField := updateValue.Field(i)
-
-		// Check if the update field is non-zero (not the zero value for its type)
-		if !isZeroValue(updateField) {
-			field.Set(updateField)
-		}
+// UpdateNullString applies updates for a pointer to string to sql.NullString.
+func UpdateNullString(dst *sql.NullString, src *string) {
+	if src != nil {
+		*dst = sql.NullString{String: *src, Valid: true}
 	}
 }
 
-func isZeroValue(v reflect.Value) bool {
-	switch v.Kind() {
-	case reflect.String:
-		return v.String() == ""
-	case reflect.Bool:
-		return !v.Bool()
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return v.Int() == 0
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return v.Uint() == 0
-	case reflect.Float32, reflect.Float64:
-		return v.Float() == 0
-	case reflect.Ptr, reflect.Interface:
-		return v.IsNil()
-	case reflect.Slice, reflect.Map, reflect.Array:
-		return v.Len() == 0
-	case reflect.Struct:
-		// For structs, check if all fields are zero values
-		for i := 0; i < v.NumField(); i++ {
-			if !isZeroValue(v.Field(i)) {
-				return false
-			}
-		}
-		return true
-	default:
-		// For other types, consider them non-zero by default
-		return false
+// UpdateNullBool applies updates for a pointer to bool to sql.NullBool.
+func UpdateNullBool(dst *sql.NullBool, src *bool) {
+	if src != nil {
+		*dst = sql.NullBool{Bool: *src, Valid: true}
+	}
+}
+
+// UpdateNullInt applies updates for a pointer to int to sql.NullInt64.
+func UpdateNullInt(dst *sql.NullInt64, src *int) {
+	if src != nil {
+		*dst = sql.NullInt64{Int64: int64(*src), Valid: true}
+	}
+}
+
+// UpdateNullInt64 applies updates for a pointer to int64 to sql.NullInt64.
+func UpdateNullInt64(dst *sql.NullInt64, src *int64) {
+	if src != nil {
+		*dst = sql.NullInt64{Int64: *src, Valid: true}
+	}
+}
+
+// UpdateString applies updates for a pointer to string.
+func UpdateString(dst *string, src *string) {
+	if src != nil {
+		*dst = *src
+	}
+}
+
+// UpdateBool applies updates for a pointer to bool.
+func UpdateBool(dst *bool, src *bool) {
+	if src != nil {
+		*dst = *src
+	}
+}
+
+// UpdateInt applies updates for a pointer to int.
+func UpdateInt[T int64 | int32 | int16 | int](dst *T, src *T) {
+	if src != nil {
+		*dst = *src
+	}
+}
+
+// UpdateTime applies updates for a pointer to time.Time.
+func UpdateTime(dst *time.Time, src *time.Time) {
+	if src != nil {
+		*dst = *src
 	}
 }

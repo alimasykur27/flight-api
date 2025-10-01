@@ -5,6 +5,11 @@ import (
 	"net/http"
 )
 
+func ParseJSON(data []byte, source interface{}) error {
+	err := json.Unmarshal(data, source)
+	return err
+}
+
 func ReadFromRequestBody(request *http.Request, result interface{}) {
 	decoder := json.NewDecoder(request.Body)
 	err := decoder.Decode(result)

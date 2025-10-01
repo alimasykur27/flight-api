@@ -1,4 +1,4 @@
-package repository
+package repository_airport
 
 import (
 	"context"
@@ -75,6 +75,61 @@ func (r *AirportRepository) Insert(ctx context.Context, tx *sql.Tx, airport mode
 	return result, nil
 }
 
+func (r *AirportRepository) SyncAirport(ctx context.Context, tx *sql.Tx, airport model.Airport) (model.Airport, error) {
+	SQL := `
+		INSERT INTO airports (
+			site_number, icao_id, faa_id, iata_id, name, type, status,
+			country, state, state_full, county, city,
+			ownership, "use", manager, manager_phone,
+			latitude, latitude_sec, longitude, longitude_sec,
+			elevation, control_tower, unicom, ctaf, sync_status
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7,
+			$8, $9, $10, $11, $12,
+			$13, $14, $15, $16,
+			$17, $18, $19, $20,
+			$21, $22, $23, $24, 1
+		)
+		RETURNING id`
+
+	row := tx.QueryRowContext(
+		ctx,
+		SQL,
+		airport.SiteNumber,
+		airport.ICAOID,
+		airport.FAAID,
+		airport.IATAID,
+		airport.Name,
+		airport.Type,
+		airport.Status,
+		airport.Country,
+		airport.State,
+		airport.StateFull,
+		airport.County,
+		airport.City,
+		airport.Ownership,
+		airport.Use,
+		airport.Manager,
+		airport.ManagerPhone,
+		airport.Latitude,
+		airport.LatitudeSec,
+		airport.Longitude,
+		airport.LongitudeSec,
+		airport.Elevation,
+		airport.ControlTower,
+		airport.Unicom,
+		airport.CTAF,
+	)
+
+	var id string
+	row.Scan(&id)
+
+	result, err := r.FindByID(ctx, tx, id)
+	util.PanicIfError(err)
+
+	return result, nil
+}
+
 func (r *AirportRepository) FindByID(ctx context.Context, tx *sql.Tx, id string) (model.Airport, error) {
 	SQL := `
 SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
@@ -108,8 +163,8 @@ LIMIT 1
 			&airport.Country,
 			&airport.State,
 			&airport.StateFull,
-			&airport.City,
 			&airport.County,
+			&airport.City,
 			&airport.Ownership,
 			&airport.Use,
 			&airport.Manager,
@@ -271,4 +326,19 @@ func (r *AirportRepository) Delete(ctx context.Context, tx *sql.Tx, id string) e
 	}
 
 	return nil
+}
+
+func (r *AirportRepository) FindExistsByICAOID(ctx context.Context, tx *sql.Tx, icaoId string) (bool, error) {
+	SQL := `SELECT 1 FROM airports WHERE icao_id = $1 LIMIT 1`
+
+	row := tx.QueryRowContext(ctx, SQL, icaoId)
+
+	var exists int
+	err := row.Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	util.PanicIfError(err)
+
+	return true, nil
 }

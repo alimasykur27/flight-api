@@ -9,6 +9,7 @@ import (
 	queryparams "flight-api/internal/dto/query_params"
 	response_dto "flight-api/internal/dto/response"
 	"flight-api/pkg/logger"
+	"flight-api/util"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,14 +30,16 @@ func newMockAiportService() *mockAirportService {
 func (m *mockAirportService) Create(ctx context.Context, r dto.AirportRequestDto) dto.AirportDto { //nolint:ireturn
 	id, _ := uuid.NewRandom()
 
-	return dto.AirportDto{
-		ID:         id,
-		SiteNumber: "SN001",
-		ICAOID:     "WIII",
-		Name:       "Soekarno-Hatta International Airport",
+	respnse := dto.AirportDto{
+		ID:         &id,
+		SiteNumber: util.Ptr("SN001"),
+		ICAOID:     util.Ptr("WIII"),
+		Name:       util.Ptr("Soekarno-Hatta International Airport"),
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
+
+	return respnse
 }
 
 func (m *mockAirportService) FindAll(ctx context.Context, p queryparams.QueryParams) pagination_dto.PaginationDto { //nolint:ireturn
@@ -44,8 +47,8 @@ func (m *mockAirportService) FindAll(ctx context.Context, p queryparams.QueryPar
 	id2, _ := uuid.NewRandom()
 
 	data := []dto.AirportDto{
-		{ID: id1, ICAOID: "WIII"},
-		{ID: id2, ICAOID: "WAAA"},
+		{ID: &id1, ICAOID: util.Ptr("WIII")},
+		{ID: &id2, ICAOID: util.Ptr("WADD")},
 	}
 
 	records := make([]interface{}, len(data))

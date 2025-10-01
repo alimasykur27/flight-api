@@ -2,6 +2,7 @@ package airport_dto
 
 import (
 	"flight-api/internal/enum"
+	"flight-api/internal/model"
 	"time"
 )
 
@@ -31,4 +32,34 @@ type AirportRequestDto struct {
 	Unicom        *string               `json:"unicom" validate:"omitempty"`
 	CTAF          *string               `json:"ctaf" validate:"omitempty"`
 	EffectiveDate *time.Time            `json:"effective_date" validate:"omitempty"`
+}
+
+func AirportRequestToAirport(r AirportRequestDto) model.Airport {
+	return model.Airport{
+		SiteNumber:    r.SiteNumber,
+		ICAOID:        r.ICAOID,
+		FAAID:         r.FAAID,
+		IATAID:        r.IATAID,
+		Name:          r.Name,
+		Type:          r.Type,
+		Status:        r.Status,
+		Country:       r.Country,
+		State:         r.State,
+		StateFull:     r.StateFull,
+		County:        r.County,
+		City:          r.City,
+		Ownership:     r.Ownership,
+		Use:           r.Use,
+		Manager:       r.Manager,
+		ManagerPhone:  r.ManagerPhone,
+		Latitude:      r.Latitude,
+		LatitudeSec:   r.LatitudeSec,
+		Longitude:     r.Longitude,
+		LongitudeSec:  r.LongitudeSec,
+		Elevation:     r.Elevation,
+		ControlTower:  r.ControlTower,
+		Unicom:        r.Unicom,
+		CTAF:          r.CTAF,
+		EffectiveDate: r.EffectiveDate,
+	}
 }

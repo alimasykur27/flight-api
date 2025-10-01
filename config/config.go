@@ -15,6 +15,7 @@ type Config struct {
 	HTTPPort        string        `mapstructure:"HTTP_PORT"`
 	LogLevel        string        `mapstructure:"LOG_LEVEL"`
 	DatabaseURL     string        `mapstructure:"DATABASE_URL"`
+	AviationURL     string        `mapstructure:"AVIATION_API_URL"`
 	ShutdownTimeout time.Duration `mapstructure:"SHUTDOWN_TIMEOUT"`
 }
 
@@ -40,9 +41,9 @@ func Load() (config Config, err error) {
 			return config, fmt.Errorf("error reading config file: %w", err)
 		}
 
-		logger.Info("No .env file found, using environment variables only")
+		logger.Warnf("No .env file found, using environment variables only")
 	} else {
-		logger.Infof("Using config file: %s", viper.ConfigFileUsed())
+		logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	}
 
 	// Also read environment variables
@@ -53,6 +54,7 @@ func Load() (config Config, err error) {
 	viper.SetDefault("HTTP_PORT", "3000")
 	viper.SetDefault("LOG_LEVEL", "info")
 	viper.SetDefault("DATABASE_URL", "")
+	viper.SetDefault("AVIATION_API_URL", "")
 	viper.SetDefault("SHUTDOWN_TIMEOUT", 5*time.Second)
 
 	err = viper.Unmarshal(&config)

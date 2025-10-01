@@ -2,6 +2,7 @@ package util
 
 import (
 	"database/sql"
+	"strconv"
 	"time"
 )
 
@@ -74,4 +75,18 @@ func FromSqlNull[T any](v interface{}) T {
 	}
 	var zero T
 	return zero
+}
+
+func ParseInt64Ptr(s string) *int64 {
+	if s == "" {
+		return nil
+	}
+
+	r, err := strconv.ParseInt(s, 10, 64)
+
+	if err != nil {
+		return nil
+	}
+
+	return &r
 }

@@ -63,6 +63,28 @@ func NewLogger(logLevel string) *Logger {
 	}
 }
 
+func (l *Logger) SetLogLevel(logLevel string) {
+	// Parse log level from string
+	switch logLevel {
+	case "trace":
+		l.logger.SetLevel(logrus.TraceLevel)
+	case "debug":
+		l.logger.SetLevel(logrus.DebugLevel)
+	case "info":
+		l.logger.SetLevel(logrus.InfoLevel)
+	case "warn":
+		l.logger.SetLevel(logrus.WarnLevel)
+	case "error":
+		l.logger.SetLevel(logrus.ErrorLevel)
+	case "fatal":
+		l.logger.SetLevel(logrus.FatalLevel)
+	case "panic":
+		l.logger.SetLevel(logrus.PanicLevel)
+	default:
+		l.logger.SetLevel(logrus.InfoLevel)
+	}
+}
+
 func (l *Logger) GetLogger() *logrus.Logger {
 	return l.logger
 }
