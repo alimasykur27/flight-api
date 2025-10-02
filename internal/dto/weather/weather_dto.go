@@ -39,7 +39,7 @@ type CurrentWeatherDto struct {
 	ShortRad   *float64 `json:"short_rad"`
 	DiffRad    *float64 `json:"diff_rad"`
 	DNI        *float64 `json:"dni"`
-	GTI        *float64 `json:"dhi"`
+	GTI        *float64 `json:"gti"`
 }
 
 type WeatherDto struct {
