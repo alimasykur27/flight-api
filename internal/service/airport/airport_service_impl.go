@@ -3,7 +3,6 @@ package service_airport
 import (
 	"context"
 	"database/sql"
-	airport_dto "flight-api/internal/dto/airport"
 	dto "flight-api/internal/dto/airport"
 	pagination_dto "flight-api/internal/dto/pagination"
 	queryparams "flight-api/internal/dto/query_params"
@@ -52,7 +51,7 @@ func (s *AirportService) Create(ctx context.Context, r dto.AirportRequestDto) dt
 	util.PanicIfError(err)
 	defer util.CommitOrRollback(tx)
 
-	airport := airport_dto.AirportRequestToAirport(r)
+	airport := dto.AirportRequestToAirport(r)
 	airport, err = s.airportRepository.Insert(ctx, tx, airport)
 	util.PanicIfError(err)
 
