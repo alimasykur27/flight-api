@@ -31,6 +31,7 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 	s.logger.Debug("[GetWeatherCondition] Fetching weather data from Weather APIs...")
 
 	if loc == nil {
+		s.logger.Errorf("[GetWeatherCondition] Failed to fetch weather data: %v", util.ErrBadRequest)
 		return nil, util.ErrBadRequest
 	}
 

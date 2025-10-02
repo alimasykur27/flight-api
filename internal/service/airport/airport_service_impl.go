@@ -43,6 +43,8 @@ func NewAirportService(
 }
 
 func (s *AirportService) Create(ctx context.Context, r dto.AirportRequestDto) dto.AirportDto {
+	s.logger.Debug("[Create] Creating new airport...")
+
 	err := s.validate.Struct(r)
 	util.PanicIfError(err)
 
@@ -59,6 +61,8 @@ func (s *AirportService) Create(ctx context.Context, r dto.AirportRequestDto) dt
 }
 
 func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryParams) pagination_dto.PaginationDto {
+	s.logger.Debug("[FindAll] Fetching all airports...")
+
 	tx, err := s.db.Begin()
 	util.PanicIfError(err)
 	defer util.CommitOrRollback(tx)
@@ -90,6 +94,8 @@ func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryPar
 }
 
 func (s *AirportService) FindByID(ctx context.Context, id string) (dto.AirportDto, error) {
+	s.logger.Debug("[FindByID] Fetching airport by ID...")
+
 	tx, err := s.db.Begin()
 	util.PanicIfError(err)
 	defer util.CommitOrRollback(tx)
@@ -104,6 +110,8 @@ func (s *AirportService) FindByID(ctx context.Context, id string) (dto.AirportDt
 }
 
 func (s *AirportService) Update(ctx context.Context, id string, u dto.AirportUpdateDto) (dto.AirportDto, error) {
+	s.logger.Debug("[Update] Updating airport...")
+
 	err := s.validate.Struct(u)
 
 	if err != nil {
@@ -131,6 +139,8 @@ func (s *AirportService) Update(ctx context.Context, id string, u dto.AirportUpd
 }
 
 func (s *AirportService) Delete(ctx context.Context, id string) error {
+	s.logger.Debug("[Delete] Deleting airport...")
+
 	tx, err := s.db.Begin()
 	util.PanicIfError(err)
 	defer util.CommitOrRollback(tx)
@@ -169,6 +179,8 @@ func (s *AirportService) GetWeatherCondition(ctx context.Context, code string, n
 }
 
 func (s *AirportService) getWeatherConditionByCode(ctx context.Context, code string) (*pagination_dto.PaginationDto, error) {
+	s.logger.Debugf("[getWeatherConditionByCode] Fetching weather data from Weather APIs...")
+
 	tx, err := s.db.Begin()
 	util.PanicIfError(err)
 	defer util.CommitOrRollback(tx)
@@ -259,6 +271,8 @@ func (s *AirportService) getWeatherConditionBySearchName(ctx context.Context, na
 }
 
 func (s *AirportService) fillUpdatableFields(airport model.Airport, u dto.AirportUpdateDto) {
+	s.logger.Debug("[fillUpdatableFields] Filling updatable fields...")
+
 	util.UpdateString(airport.SiteNumber, u.SiteNumber)
 	util.UpdateString(airport.FAAID, u.FAAID)
 	util.UpdateString(airport.IATAID, u.IATAID)
