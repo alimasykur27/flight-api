@@ -16,6 +16,8 @@ type Config struct {
 	LogLevel        string        `mapstructure:"LOG_LEVEL"`
 	DatabaseURL     string        `mapstructure:"DATABASE_URL"`
 	AviationURL     string        `mapstructure:"AVIATION_API_URL"`
+	WeatherURL      string        `mapstructure:"WEATHER_API_URL"`
+	WeatherAPIKey   string        `mapstructure:"WEATHER_API_KEY"`
 	ShutdownTimeout time.Duration `mapstructure:"SHUTDOWN_TIMEOUT"`
 }
 
@@ -55,6 +57,8 @@ func Load() (config Config, err error) {
 	viper.SetDefault("LOG_LEVEL", "info")
 	viper.SetDefault("DATABASE_URL", "")
 	viper.SetDefault("AVIATION_API_URL", "")
+	viper.SetDefault("WEATHER_API_URL", "")
+	viper.SetDefault("WEATHER_API_KEY", "")
 	viper.SetDefault("SHUTDOWN_TIMEOUT", 5*time.Second)
 
 	err = viper.Unmarshal(&config)

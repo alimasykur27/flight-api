@@ -35,6 +35,7 @@ func (h *AirportHandler) RegisterRouter(r chi.Router) {
 		r.Get("/{id}", h.FindByID)
 		r.Put("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
+		r.Get("/weathers", h.GetWeatherCondition)
 	}
 
 	// Airports Endpoints
@@ -195,6 +196,68 @@ func (h *AirportHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		Status:  "OK",
 		Data:    nil,
 		Message: fmt.Sprintf("Airport with ID %s deleted successfully", id),
+	}
+
+	util.WriteToResponseBody(w, http.StatusOK, response)
+}
+
+func (h *AirportHandler) GetWeatherCondition(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameter optional
+	var code, name string
+	var response response_dto.ResponseDto
+
+	query := queryparams.GetQueryParams(r)
+	code = r.URL.Query().Get("code")
+	name = r.URL.Query().Get("name")
+
+	if code == "" && name == "" {
+		// Should has value
+		response = response_dto.ResponseDto{
+			Code:    http.StatusBadRequest,
+			Status:  "Bad Request",
+			Data:    nil,
+			Message: "neither 'code' or 'name' query parameter is required",
+		}
+
+		util.WriteToResponseBody(w, http.StatusBadRequest, response)
+		return
+	} else if code != "" && name != "" {
+		// can't has value at the same time
+		response = response_dto.ResponseDto{
+			Code:    http.StatusBadRequest,
+			Status:  "Bad Request",
+			Data:    nil,
+			Message: "'code' and 'name' query parameter can't be used at the same time",
+		}
+
+		util.WriteToResponseBody(w, http.StatusBadRequest, response)
+	}
+
+	// Call service
+	data, err := h.airportService.GetWeatherCondition(r.Context(), code, name, query)
+
+	switch {
+	case err == nil:
+		response = response_dto.ResponseDto{
+			Code:    http.StatusOK,
+			Status:  "OK",
+			Data:    data,
+			Message: "Success",
+		}
+	case err == util.ErrNotFound:
+		response = response_dto.ResponseDto{
+			Code:    http.StatusNotFound,
+			Status:  "Not Found",
+			Data:    nil,
+			Message: "Airport and weather data not found",
+		}
+	default:
+		response = response_dto.ResponseDto{
+			Code:    http.StatusInternalServerError,
+			Status:  "Internal Server Error",
+			Data:    nil,
+			Message: err.Error(),
+		}
 	}
 
 	util.WriteToResponseBody(w, http.StatusOK, response)

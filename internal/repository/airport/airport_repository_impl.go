@@ -146,7 +146,9 @@ LIMIT 1
 	}
 
 	rows, err := tx.QueryContext(ctx, SQL, airportId)
-	util.PanicIfError(err)
+	if err == sql.ErrNoRows {
+		return model.Airport{}, util.ErrNotFound
+	}
 	defer rows.Close()
 
 	airport := model.Airport{}
@@ -187,20 +189,15 @@ LIMIT 1
 	}
 }
 
-func (r *AirportRepository) FindAll(ctx context.Context, tx *sql.Tx, args ...interface{}) ([]model.Airport, int, error) {
-	SQL := `SELECT id, site_number, icao_id, faa_id, iata_id, type, status, created_at, updated_at
-			FROM airports 
-			ORDER BY icao_id
-			LIMIT $1
-			OFFSET $2`
+func (r *AirportRepository) FindAll(ctx context.Context, tx *sql.Tx, args map[string]interface{}) ([]model.Airport, int, error) {
+	limit, offset := util.ParsePagination(args)
 
-	limit, offset, err := util.ParsePagination(args...)
-	util.PanicIfError(err)
-
-	var total int
-	row := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM airports`)
-	err = row.Scan(&total)
-	util.PanicIfError(err)
+	SQL := `
+	SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status, created_at, updated_at
+	FROM airports 
+	ORDER BY icao_id
+	LIMIT $1
+	OFFSET $2`
 
 	rows, err := tx.QueryContext(ctx, SQL, limit, offset)
 	util.PanicIfError(err)
@@ -214,6 +211,7 @@ func (r *AirportRepository) FindAll(ctx context.Context, tx *sql.Tx, args ...int
 			&airport.SiteNumber,
 			&airport.ICAOID,
 			&airport.FAAID,
+			&airport.IATAID,
 			&airport.Name,
 			&airport.Type,
 			&airport.Status,
@@ -224,9 +222,152 @@ func (r *AirportRepository) FindAll(ctx context.Context, tx *sql.Tx, args ...int
 		airports = append(airports, airport)
 	}
 
+	var total int
+	TotalSQL := `SELECT COUNT(*) FROM airports`
+
+	row := tx.QueryRowContext(ctx, TotalSQL)
+	err = row.Scan(&total)
+	util.PanicIfError(err)
+
 	return airports, total, nil
 }
 
+func (r *AirportRepository) FindBySearchName(ctx context.Context, tx *sql.Tx, name string, args map[string]interface{}) ([]model.Airport, int, error) {
+	r.logger.Debugf("[FindBySearchName] Find airports by name: %s", name)
+
+	limit, offset := util.ParsePagination(args)
+	searchName := "%" + name + "%"
+
+	SQL := `
+SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
+	country, state, state_full, county, city, ownership, "use",
+	manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
+	control_tower, unicom, ctaf, created_at, updated_at
+FROM airports 
+WHERE LOWER(name) LIKE LOWER($3)
+ORDER BY icao_id
+LIMIT $1
+OFFSET $2`
+
+	rows, err := tx.QueryContext(ctx, SQL, limit, offset, searchName)
+	util.PanicIfError(err)
+	defer rows.Close()
+
+	var airports []model.Airport
+	for rows.Next() {
+		airport := model.Airport{}
+		err := rows.Scan(
+			&airport.ID,
+			&airport.SiteNumber,
+			&airport.ICAOID,
+			&airport.FAAID,
+			&airport.IATAID,
+			&airport.Name,
+			&airport.Type,
+			&airport.Status,
+			&airport.Country,
+			&airport.State,
+			&airport.StateFull,
+			&airport.County,
+			&airport.City,
+			&airport.Ownership,
+			&airport.Use,
+			&airport.Manager,
+			&airport.ManagerPhone,
+			&airport.Latitude,
+			&airport.LatitudeSec,
+			&airport.Longitude,
+			&airport.LongitudeSec,
+			&airport.Elevation,
+			&airport.ControlTower,
+			&airport.Unicom,
+			&airport.CTAF,
+			&airport.CreatedAt,
+			&airport.UpdatedAt,
+		)
+		util.PanicIfError(err)
+		airports = append(airports, airport)
+	}
+
+	var total int
+	TotalSQL := `SELECT COUNT(*) FROM airports WHERE name ILIKE $1`
+
+	row := tx.QueryRowContext(ctx, TotalSQL, searchName)
+	err = row.Scan(&total)
+	util.PanicIfError(err)
+
+	return airports, total, nil
+}
+
+func (r *AirportRepository) FindExistsByICAOID(ctx context.Context, tx *sql.Tx, icaoId string) (bool, error) {
+	SQL := `SELECT 1 FROM airports WHERE icao_id = $1 LIMIT 1`
+
+	row := tx.QueryRowContext(ctx, SQL, icaoId)
+
+	var exists int
+	err := row.Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	util.PanicIfError(err)
+
+	return true, nil
+}
+
+func (r *AirportRepository) FindByICAOID(ctx context.Context, tx *sql.Tx, icaoId string) (model.Airport, error) {
+	SQL := `
+SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
+	country, state, state_full, county, city, ownership, "use",
+	manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
+	control_tower, unicom, ctaf, created_at, updated_at
+FROM airports 
+WHERE icao_id = $1 
+LIMIT 1
+`
+
+	rows, err := tx.QueryContext(ctx, SQL, icaoId)
+	if err == sql.ErrNoRows {
+		return model.Airport{}, util.ErrNotFound
+	}
+	defer rows.Close()
+
+	airport := model.Airport{}
+	if rows.Next() {
+		err := rows.Scan(
+			&airport.ID,
+			&airport.SiteNumber,
+			&airport.ICAOID,
+			&airport.FAAID,
+			&airport.IATAID,
+			&airport.Name,
+			&airport.Type,
+			&airport.Status,
+			&airport.Country,
+			&airport.State,
+			&airport.StateFull,
+			&airport.County,
+			&airport.City,
+			&airport.Ownership,
+			&airport.Use,
+			&airport.Manager,
+			&airport.ManagerPhone,
+			&airport.Latitude,
+			&airport.LatitudeSec,
+			&airport.Longitude,
+			&airport.LongitudeSec,
+			&airport.Elevation,
+			&airport.ControlTower,
+			&airport.Unicom,
+			&airport.CTAF,
+			&airport.CreatedAt,
+			&airport.UpdatedAt,
+		)
+		util.PanicIfError(err)
+		return airport, nil
+	} else {
+		return model.Airport{}, util.ErrNotFound
+	}
+}
 func (r *AirportRepository) Update(ctx context.Context, tx *sql.Tx, id string, airport model.Airport) (model.Airport, error) {
 	SQL := `
 		UPDATE airports SET
@@ -328,17 +469,15 @@ func (r *AirportRepository) Delete(ctx context.Context, tx *sql.Tx, id string) e
 	return nil
 }
 
-func (r *AirportRepository) FindExistsByICAOID(ctx context.Context, tx *sql.Tx, icaoId string) (bool, error) {
-	SQL := `SELECT 1 FROM airports WHERE icao_id = $1 LIMIT 1`
+func parseAirportQuery(args map[string]interface{}) string {
+	name := ""
 
-	row := tx.QueryRowContext(ctx, SQL, icaoId)
-
-	var exists int
-	err := row.Scan(&exists)
-	if err == sql.ErrNoRows {
-		return false, nil
+	if len(args) > 0 {
+		// Get name
+		if val, ok := args["name"]; ok {
+			name = val.(string)
+		}
 	}
-	util.PanicIfError(err)
 
-	return true, nil
+	return name
 }

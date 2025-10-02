@@ -15,30 +15,30 @@ import (
 type AviationService struct {
 	logger *logger.Logger
 	cfg    *config.Config
+	client *http.Client
 }
 
 func NewAviationService(logger *logger.Logger, cfg *config.Config) IAviationService {
 	return &AviationService{
 		logger: logger,
 		cfg:    cfg,
+		client: &http.Client{
+			Timeout: 60 * time.Second,
+		},
 	}
 }
 
 func (s *AviationService) FetchAirportData(ctx context.Context, icaoCodes []string) (map[string]airport_dto.AirportRequestDto, error) {
 	var airportsData = make(map[string]airport_dto.AirportRequestDto)
 
-	// Call Aviation API.
-	client := &http.Client{
-		Timeout: 60 * time.Second,
-	}
-
+	// Call Aviation API
 	s.logger.Debug("[FecthAirportData] Fetching airport data from Aviation API...")
 	for _, code := range icaoCodes {
 		s.logger.Debugf("Fetching data for ICAO code: %s", code)
 		URL := s.cfg.AviationURL + "/airports?apt=" + code
 
 		s.logger.Debugf("Request URL: %s", URL)
-		resp, err := client.Get(URL)
+		resp, err := s.client.Get(URL)
 
 		if err != nil {
 			s.logger.Errorf("[FetchiAirportData] fetching data for ICAO code %s: %v", code, err)

@@ -7,8 +7,10 @@ import (
 	dto "flight-api/internal/dto/airport"
 	pagination_dto "flight-api/internal/dto/pagination"
 	queryparams "flight-api/internal/dto/query_params"
+	weather_dto "flight-api/internal/dto/weather"
 	"flight-api/internal/model"
 	repository_airport "flight-api/internal/repository/airport"
+	service_weather "flight-api/internal/service/weather"
 
 	"flight-api/pkg/logger"
 	"flight-api/util"
@@ -21,6 +23,7 @@ type AirportService struct {
 	validate          *validator.Validate
 	db                *sql.DB
 	airportRepository repository_airport.IAirportRepository
+	weatherService    service_weather.IWeatherService
 }
 
 func NewAirportService(
@@ -28,12 +31,14 @@ func NewAirportService(
 	validate *validator.Validate,
 	db *sql.DB,
 	airportRepository repository_airport.IAirportRepository,
+	weatherService service_weather.IWeatherService,
 ) IAirportService {
 	return &AirportService{
 		logger:            logger,
 		validate:          validate,
 		db:                db,
 		airportRepository: airportRepository,
+		weatherService:    weatherService,
 	}
 }
 
@@ -58,7 +63,11 @@ func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryPar
 	util.PanicIfError(err)
 	defer util.CommitOrRollback(tx)
 
-	airports, total, err := s.airportRepository.FindAll(ctx, tx, query.Limit, query.Offset)
+	args := map[string]interface{}{
+		"limit":  query.Limit,
+		"offset": query.Offset,
+	}
+	airports, total, err := s.airportRepository.FindAll(ctx, tx, args)
 	util.PanicIfError(err)
 
 	airportRecords := dto.ToAirportRecordDtos(airports)
@@ -72,7 +81,7 @@ func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryPar
 		Object:  "pagination",
 		Records: records,
 		Total:   total,
-		Meta: pagination_dto.PaginationMetaDto{
+		Meta: &pagination_dto.PaginationMetaDto{
 			Limit: query.Limit,
 			Page:  query.Page,
 			Next:  hasNext,
@@ -124,7 +133,6 @@ func (s *AirportService) Update(ctx context.Context, id string, u dto.AirportUpd
 func (s *AirportService) Delete(ctx context.Context, id string) error {
 	tx, err := s.db.Begin()
 	util.PanicIfError(err)
-
 	defer util.CommitOrRollback(tx)
 
 	_, err = s.airportRepository.FindByID(ctx, tx, id)
@@ -137,6 +145,117 @@ func (s *AirportService) Delete(ctx context.Context, id string) error {
 	util.PanicIfError(err)
 
 	return nil
+}
+
+func (s *AirportService) GetWeatherCondition(ctx context.Context, code string, name string, query queryparams.QueryParams) (*pagination_dto.PaginationDto, error) {
+	s.logger.Debugf("[GetWeatherCondition] Fetching weather data from Weather APIs...")
+
+	var response *pagination_dto.PaginationDto
+	var err error
+
+	if code != "" {
+		response, err = s.getWeatherConditionByCode(ctx, code)
+	} else if name != "" {
+		response, err = s.getWeatherConditionBySearchName(ctx, name, query)
+	} else {
+		return nil, util.ErrBadRequest
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (s *AirportService) getWeatherConditionByCode(ctx context.Context, code string) (*pagination_dto.PaginationDto, error) {
+	tx, err := s.db.Begin()
+	util.PanicIfError(err)
+	defer util.CommitOrRollback(tx)
+
+	// Find Airport By ICAO ID
+	airport, err := s.airportRepository.FindByICAOID(ctx, tx, code)
+
+	if err == util.ErrNotFound {
+		return nil, util.ErrNotFound
+	} else if err != nil {
+		return nil, util.ErrInternalServer
+	}
+
+	// Get Airport Weather Condition
+	weather, _ := s.weatherService.GetWeatherCondition(ctx, airport.City)
+
+	data := []dto.AirportWeatherDto{}
+	airportWeather := dto.AirportWeatherDto{
+		Object:  "airport_weather",
+		Code:    airport.ICAOID,
+		Airport: util.Ptr(dto.ToAirportDto(airport)),
+		Weather: weather.Current,
+	}
+	data = append(data, airportWeather)
+
+	response := pagination_dto.PaginationDto{
+		Object:  "pagination",
+		Records: util.ToInterfaces(data),
+		Total:   len(data),
+		Meta:    nil,
+	}
+
+	return &response, nil
+}
+
+func (s *AirportService) getWeatherConditionBySearchName(ctx context.Context, name string, query queryparams.QueryParams) (*pagination_dto.PaginationDto, error) {
+	s.logger.Debugf("[getWeatherConditionBySearchName] Fetching weather data from Weather APIs...")
+
+	tx, err := s.db.Begin()
+	util.PanicIfError(err)
+	defer util.CommitOrRollback(tx)
+
+	args := map[string]interface{}{
+		"limit":  query.Limit,
+		"offset": query.Offset,
+	}
+
+	// Get Airport By Search Name
+	airports, total, err := s.airportRepository.FindBySearchName(ctx, tx, name, args)
+	if err != nil {
+		return nil, err
+	}
+
+	records := []dto.AirportWeatherDto{}
+	for _, airport := range airports {
+		// Get Airport Weather Condition
+		weather, _ := s.weatherService.GetWeatherCondition(ctx, airport.City)
+
+		var current *weather_dto.CurrentWeatherDto
+		if weather == nil {
+			current = nil
+		} else {
+			current = weather.Current
+		}
+
+		res := dto.AirportWeatherDto{
+			Object:  "airport_weather",
+			Code:    airport.ICAOID,
+			Airport: util.Ptr(dto.ToAirportDto(airport)),
+			Weather: current,
+		}
+
+		records = append(records, res)
+	}
+
+	result := pagination_dto.PaginationDto{
+		Object:  "pagination",
+		Records: util.ToInterfaces(records),
+		Total:   total,
+		Meta: &pagination_dto.PaginationMetaDto{
+			Limit: query.Limit,
+			Page:  query.Page,
+			Next:  false,
+		},
+	}
+
+	return &result, nil
 }
 
 func (s *AirportService) fillUpdatableFields(airport model.Airport, u dto.AirportUpdateDto) {

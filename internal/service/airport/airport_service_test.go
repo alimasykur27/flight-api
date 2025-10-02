@@ -6,6 +6,7 @@ import (
 	airport_dto "flight-api/internal/dto/airport"
 	"flight-api/internal/enum"
 	repository_airport "flight-api/internal/repository/airport"
+	service_weather "flight-api/internal/service/weather"
 	"flight-api/pkg/database"
 	"flight-api/pkg/logger"
 	"flight-api/util"
@@ -27,7 +28,8 @@ func TestCreateAirport(t *testing.T) {
 	validate := util.NewValidator()
 
 	repo := repository_airport.NewAirportRepository(logger)
-	service := NewAirportService(logger, validate, db, repo)
+	weatherService := service_weather.NewWeatherService(logger, &cfg)
+	service := NewAirportService(logger, validate, db, repo, weatherService)
 
 	airportReq := airport_dto.AirportRequestDto{
 		SiteNumber: util.Ptr("askdj"),

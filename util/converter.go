@@ -90,3 +90,12 @@ func ParseInt64Ptr(s string) *int64 {
 
 	return &r
 }
+
+// ToInterfaces converts any slice of values into []interface{}.
+func ToInterfaces[T any](in []T) []interface{} {
+	out := make([]interface{}, len(in))
+	for i, v := range in {
+		out[i] = v
+	}
+	return out
+}

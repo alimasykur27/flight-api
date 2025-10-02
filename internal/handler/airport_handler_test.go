@@ -60,7 +60,7 @@ func (m *mockAirportService) FindAll(ctx context.Context, p queryparams.QueryPar
 		Object:  "pagination",
 		Records: records,
 		Total:   2,
-		Meta: pagination_dto.PaginationMetaDto{
+		Meta: &pagination_dto.PaginationMetaDto{
 			Limit: 2,
 			Page:  1,
 			Next:  false,
@@ -78,6 +78,10 @@ func (m *mockAirportService) Update(ctx context.Context, id string, u dto.Airpor
 
 func (m *mockAirportService) Delete(ctx context.Context, id string) error {
 	return nil
+}
+
+func (m *mockAirportService) GetWeatherCondition(ctx context.Context, code string, name string, query queryparams.QueryParams) (*pagination_dto.PaginationDto, error) {
+	return &pagination_dto.PaginationDto{}, nil
 }
 
 // --- Tests ---

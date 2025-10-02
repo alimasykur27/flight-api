@@ -44,9 +44,10 @@ func (h *SyncHandler) SyncAirport(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("Failed to sync airports: ", err)
 		response := response_dto.ResponseDto{
-			Code:   http.StatusInternalServerError,
-			Status: "Internal Server Error",
-			Data:   err.Error(),
+			Code:    http.StatusInternalServerError,
+			Status:  "Internal Server Error",
+			Data:    err.Error(),
+			Message: err.Error(),
 		}
 		util.WriteToResponseBody(w, http.StatusInternalServerError, response)
 		return
@@ -56,9 +57,10 @@ func (h *SyncHandler) SyncAirport(w http.ResponseWriter, r *http.Request) {
 
 	// Return response
 	response := response_dto.ResponseDto{
-		Code:   200,
-		Status: "OK",
-		Data:   data,
+		Code:    200,
+		Status:  "OK",
+		Data:    data,
+		Message: "Successfully synced airports",
 	}
 
 	util.WriteToResponseBody(w, http.StatusOK, response)

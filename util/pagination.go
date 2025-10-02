@@ -1,24 +1,20 @@
 package util
 
-import "errors"
-
-// ParsePagination read args[0] dan args[1] as int
+// ParsePagination read limit and offset
 // default: limit=10, offset=0
-func ParsePagination(args ...interface{}) (int, int, error) {
+func ParsePagination(args map[string]interface{}) (int, int) {
 	limit := 10
 	offset := 0
 
-	if len(args) >= 2 {
-		l, ok := args[0].(int)
-		if !ok {
-			return 0, 0, errors.New("limit argument is not an int")
+	if len(args) > 0 {
+		if val, ok := args["limit"]; ok {
+			limit = val.(int)
 		}
-		o, ok := args[1].(int)
-		if !ok {
-			return 0, 0, errors.New("offset argument is not an int")
+
+		if val, ok := args["offset"]; ok {
+			offset = val.(int)
 		}
-		limit, offset = l, o
 	}
 
-	return limit, offset, nil
+	return limit, offset
 }

@@ -7,8 +7,8 @@ type PaginationMetaDto struct {
 }
 
 type PaginationDto struct {
-	Object  string            `json:"object"`
-	Records []interface{}     `json:"records"`
-	Total   int               `json:"total"`
-	Meta    PaginationMetaDto `json:"meta"`
+	Object  string             `json:"object"`
+	Records []interface{}      `json:"records"`
+	Total   int                `json:"total"`
+	Meta    *PaginationMetaDto `json:"meta"`
 }

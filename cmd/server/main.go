@@ -8,6 +8,7 @@ import (
 	service_airport "flight-api/internal/service/airport"
 	service_aviation "flight-api/internal/service/aviation"
 	service_sync "flight-api/internal/service/sync"
+	service_weather "flight-api/internal/service/weather"
 	"flight-api/pkg/database"
 	"flight-api/pkg/httpserver"
 	"flight-api/pkg/logger"
@@ -54,19 +55,22 @@ func main() {
 	airportRepository := repo_airport.NewAirportRepository(logger)
 
 	// Initialize service
-	airportService := service_airport.NewAirportService(logger, validate, db, airportRepository)
+	weatherService := service_weather.NewWeatherService(logger, &cfg)
+	airportService := service_airport.NewAirportService(logger, validate, db, airportRepository, weatherService)
 	aviationService := service_aviation.NewAviationService(logger, &cfg)
 	syncService := service_sync.NewSyncService(logger, validate, &cfg, db, airportRepository, aviationService)
 
 	// Initialize Handlers
 	airportHandler := handler.NewAirportHandler(airportService, logger)
 	syncHandler := handler.NewSyncHandler(syncService, logger)
+	weatherHandler := handler.NewWeatherHandler(weatherService, logger)
 
 	// Setup router
 	logger.Info("Setup Router ...")
 	router := httpserver.NewRouter(
 		airportHandler,
 		syncHandler,
+		weatherHandler,
 	)
 
 	// Start HTTP server

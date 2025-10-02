@@ -13,4 +13,5 @@ type IAirportService interface {
 	FindByID(ctx context.Context, id string) (dto.AirportDto, error)
 	Update(ctx context.Context, id string, u dto.AirportUpdateDto) (dto.AirportDto, error)
 	Delete(ctx context.Context, id string) error
+	GetWeatherCondition(ctx context.Context, code string, name string, query queryparams.QueryParams) (*pagination_dto.PaginationDto, error)
 }
