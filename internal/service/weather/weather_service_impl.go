@@ -40,7 +40,7 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 	location := url.QueryEscape(strings.ToUpper(*loc))
 	URL := currentWeatherUrl + "?key=" + s.cfg.WeatherAPIKey + "&q=" + location
 
-	s.logger.Debugf("Request URL: %s", URL)
+	s.logger.Debugf("[GetWeatherCondition] Location: %s", *loc)
 	resp, err := s.client.Get(URL)
 
 	if err == http.ErrHandlerTimeout {
@@ -68,7 +68,7 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 		}
 
 		if errorCode == 1006 {
-			s.logger.Debug("Error code: ", errorCode)
+			s.logger.Debug("[GetWeatherCondition] Error code: ", errorCode)
 			return nil, util.ErrNotFound
 		}
 
@@ -90,10 +90,10 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 
 	err = util.ParseJSON(body, &data)
 	if err != nil {
-		s.logger.Debugf("Failed to unmarshal response body: %v", err)
+		s.logger.Debugf("[GetWeatherCondition] Failed to unmarshal response body: %v", err)
 		return nil, util.ErrInternalServer
 	}
 
-	s.logger.Debug("Finished fetching weather data.")
+	s.logger.Debug("[GetWeatherCondition] Finished fetching weather data.")
 	return &data, nil
 }

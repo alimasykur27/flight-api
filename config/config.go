@@ -14,6 +14,7 @@ type Config struct {
 	ServiceName     string        `mapstructure:"SERVICE_NAME"`
 	HTTPPort        string        `mapstructure:"HTTP_PORT"`
 	LogLevel        string        `mapstructure:"LOG_LEVEL"`
+	AppEnv          string        `mapstructure:"APP_ENV"`
 	DatabaseURL     string        `mapstructure:"DATABASE_URL"`
 	AviationURL     string        `mapstructure:"AVIATION_API_URL"`
 	WeatherURL      string        `mapstructure:"WEATHER_API_URL"`
@@ -55,6 +56,7 @@ func Load() (config Config, err error) {
 	viper.SetDefault("SERVICE_NAME", "flight-api")
 	viper.SetDefault("HTTP_PORT", "3000")
 	viper.SetDefault("LOG_LEVEL", "info")
+	viper.SetDefault("APP_ENV", "development")
 	viper.SetDefault("DATABASE_URL", "")
 	viper.SetDefault("AVIATION_API_URL", "")
 	viper.SetDefault("WEATHER_API_URL", "")
