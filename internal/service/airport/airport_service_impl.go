@@ -112,7 +112,6 @@ func (s *AirportService) Update(ctx context.Context, id string, u dto.AirportUpd
 	s.logger.Debug("[Update] Updating airport...")
 
 	err := s.validate.Struct(u)
-
 	if err != nil {
 		util.LogPanicError(err)
 		return dto.AirportDto{}, util.ErrBadRequest
@@ -130,7 +129,7 @@ func (s *AirportService) Update(ctx context.Context, id string, u dto.AirportUpd
 		util.PanicIfError(err)
 	}
 
-	s.fillUpdatableFields(airport, u)
+	s.fillUpdatableFields(&airport, u)
 	updatedAirport, err := s.airportRepository.Update(ctx, tx, id, airport)
 	util.PanicIfError(err)
 
@@ -269,31 +268,31 @@ func (s *AirportService) getWeatherConditionBySearchName(ctx context.Context, na
 	return &result, nil
 }
 
-func (s *AirportService) fillUpdatableFields(airport model.Airport, u dto.AirportUpdateDto) {
+func (s *AirportService) fillUpdatableFields(airport *model.Airport, u dto.AirportUpdateDto) {
 	s.logger.Debug("[fillUpdatableFields] Filling updatable fields...")
 
-	util.UpdateString(airport.SiteNumber, u.SiteNumber)
-	util.UpdateString(airport.FAAID, u.FAAID)
-	util.UpdateString(airport.IATAID, u.IATAID)
-	util.UpdateString(airport.Name, u.Name)
-	util.UpdateString(airport.Type, (*string)(u.Type))
-	util.UpdateBool(airport.Status, u.Status)
-	util.UpdateString(airport.Country, u.Country)
-	util.UpdateString(airport.State, u.State)
-	util.UpdateString(airport.StateFull, u.StateFull)
-	util.UpdateString(airport.County, u.County)
-	util.UpdateString(airport.City, u.City)
-	util.UpdateString(airport.Ownership, (*string)(u.Ownership))
-	util.UpdateString(airport.Use, (*string)(u.Use))
-	util.UpdateString(airport.Manager, u.Manager)
-	util.UpdateString(airport.ManagerPhone, u.ManagerPhone)
-	util.UpdateString(airport.Latitude, u.Latitude)
-	util.UpdateString(airport.LatitudeSec, u.LatitudeSec)
-	util.UpdateString(airport.Longitude, u.Longitude)
-	util.UpdateString(airport.LongitudeSec, u.LongitudeSec)
-	util.UpdateInt(airport.Elevation, u.Elevation)
-	util.UpdateBool(airport.ControlTower, u.ControlTower)
-	util.UpdateString(airport.Unicom, u.Unicom)
-	util.UpdateString(airport.CTAF, u.CTAF)
-	util.UpdateTime(airport.EffectiveDate, u.EffectiveDate)
+	util.UpdateString(&airport.SiteNumber, u.SiteNumber)
+	util.UpdateString(&airport.FAAID, u.FAAID)
+	util.UpdateString(&airport.IATAID, u.IATAID)
+	util.UpdateString(&airport.Name, u.Name)
+	util.UpdateString(&airport.Type, (*string)(u.Type))
+	util.UpdateBool(&airport.Status, u.Status)
+	util.UpdateString(&airport.Country, u.Country)
+	util.UpdateString(&airport.State, u.State)
+	util.UpdateString(&airport.StateFull, u.StateFull)
+	util.UpdateString(&airport.County, u.County)
+	util.UpdateString(&airport.City, u.City)
+	util.UpdateString(&airport.Ownership, (*string)(u.Ownership))
+	util.UpdateString(&airport.Use, (*string)(u.Use))
+	util.UpdateString(&airport.Manager, u.Manager)
+	util.UpdateString(&airport.ManagerPhone, u.ManagerPhone)
+	util.UpdateString(&airport.Latitude, u.Latitude)
+	util.UpdateString(&airport.LatitudeSec, u.LatitudeSec)
+	util.UpdateString(&airport.Longitude, u.Longitude)
+	util.UpdateString(&airport.LongitudeSec, u.LongitudeSec)
+	util.UpdateInt(&airport.Elevation, u.Elevation)
+	util.UpdateBool(&airport.ControlTower, u.ControlTower)
+	util.UpdateString(&airport.Unicom, u.Unicom)
+	util.UpdateString(&airport.CTAF, u.CTAF)
+	util.UpdateTime(&airport.EffectiveDate, u.EffectiveDate)
 }
