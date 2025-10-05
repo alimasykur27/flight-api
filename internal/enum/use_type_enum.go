@@ -1,7 +1,5 @@
 package enum
 
-import "database/sql"
-
 type UseTypeEnum *string
 
 var (
@@ -24,12 +22,4 @@ func ToUseType(s string) UseTypeEnum {
 	default:
 		return UseTypeEnum(USE_NIL)
 	}
-}
-
-func FromNullStringToUseType(ns sql.NullString) UseTypeEnum {
-	if ns.Valid {
-		return ToUseType(ns.String)
-	}
-
-	return USE_NIL
 }

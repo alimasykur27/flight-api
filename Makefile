@@ -38,7 +38,11 @@ docker-build:
 
 # Run Docker Image
 docker-run:
-	docker run -p 3000:3000 --env-file .env ${BINARY_NAME}
+	docker run -p 3000:3000 --env-file .env ${BINARY_NAME}\\
+
+# Create DB Test
+docker-postgres-test:
+	docker exec -it flight_api_db psql -U postgres -d flightdb -c "CREATE DATABASE flightdb_test;"
 
 # Install dependencies
 deps:

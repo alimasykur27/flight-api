@@ -1,7 +1,5 @@
 package enum
 
-import "database/sql"
-
 type FasilityTypeEnum *string
 
 var (
@@ -24,11 +22,4 @@ func ToFacilityType(s string) FasilityTypeEnum {
 	default:
 		return NIL
 	}
-}
-
-func FromNullStringToFacilityType(ns sql.NullString) FasilityTypeEnum {
-	if ns.Valid {
-		return ToFacilityType(ns.String)
-	}
-	return NIL
 }

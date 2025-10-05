@@ -11,14 +11,14 @@ import (
 type AviationAirportDto struct {
 	SiteNumber              string `json:"site_number"`
 	Type                    string `json:"type"`
-	FasilityName            string `json:"facility_name"`
+	FacilityName            string `json:"facility_name"`
 	FAAIdentifier           string `json:"faa_ident"`
 	ICAOIdentifier          string `json:"icao_ident"`
 	Region                  string `json:"region"`
-	DictrictOffice          string `json:"district_office"`
+	DistrictOffice          string `json:"district_office"`
 	State                   string `json:"state"`
 	StateFull               string `json:"state_full"`
-	Country                 string `json:"country"`
+	County                  string `json:"county"`
 	City                    string `json:"city"`
 	Ownership               string `json:"ownership"`
 	Use                     string `json:"use"`
@@ -46,9 +46,10 @@ func ToAirportRequestDto(source AviationAirportDto) airport_dto.AirportRequestDt
 		ICAOID:        &source.ICAOIdentifier,
 		FAAID:         &source.FAAIdentifier,
 		IATAID:        &source.FAAIdentifier,
-		Name:          &source.FasilityName,
+		Name:          &source.FacilityName,
 		Type:          enum.ToFacilityType(strings.ToLower(source.Type)),
 		Status:        util.Ptr((ToAirportStatus(source.Status))),
+		Country:       nil,
 		State:         &source.State,
 		StateFull:     &source.StateFull,
 		County:        &source.Region,

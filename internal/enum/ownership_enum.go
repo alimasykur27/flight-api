@@ -1,7 +1,5 @@
 package enum
 
-import "database/sql"
-
 type OwnershipEnum *string
 
 var (
@@ -24,11 +22,4 @@ func ToOwnership(s string) OwnershipEnum {
 	default:
 		return OwnershipEnum(OWN_NIL)
 	}
-}
-
-func FromNullStringToOwnership(ns sql.NullString) OwnershipEnum {
-	if ns.Valid {
-		return ToOwnership(ns.String)
-	}
-	return OWN_NIL
 }

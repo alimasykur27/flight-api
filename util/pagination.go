@@ -8,11 +8,14 @@ func ParsePagination(args map[string]interface{}) (int, int) {
 
 	if len(args) > 0 {
 		if val, ok := args["limit"]; ok {
-			limit = val.(int)
-		}
-
-		if val, ok := args["offset"]; ok {
-			offset = val.(int)
+			if v, ok := val.(int); ok {
+				limit = v
+			}
+			if val, ok := args["offset"]; ok {
+				if v, ok := val.(int); ok {
+					offset = v
+				}
+			}
 		}
 	}
 

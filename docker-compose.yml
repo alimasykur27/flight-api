@@ -7,8 +7,9 @@ services:
       - .env
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: flightdb
+      POSTGRES_TEST_DB: flightdb_test
     ports:
       - "5432:5432"
     volumes:

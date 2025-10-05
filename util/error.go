@@ -9,6 +9,7 @@ import (
 
 var ErrNotFound = errors.New("record not found")
 var ErrBadRequest = errors.New("bad request")
+var ErrGatewayTimeout = errors.New("gateway timeout")
 var ErrInternalServer = errors.New("internal server error")
 
 // LogPanicError will log the error and panic if the error is not nil

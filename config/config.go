@@ -3,6 +3,7 @@ package config
 import (
 	"flight-api/pkg/logger"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -25,18 +26,22 @@ type Config struct {
 func Load() (config Config, err error) {
 	logger := logger.NewLogger(logger.INFO_DEBUG_LEVEL)
 
-	// Setup viper to read from .env file
-	viper.SetConfigName(".env")
-	viper.SetConfigType("env")
+	if path := os.Getenv("CONFIG_FILE"); path != "" {
+		viper.SetConfigFile(path)
+	} else {
+		// Setup viper to read from .env file
+		viper.SetConfigName(".env")
+		viper.SetConfigType("env")
 
-	// Handle for repo root
-	_, thisFile, _, _ := runtime.Caller(0) // .../config/config.go
-	configDir := filepath.Dir(thisFile)    // .../config
-	repoRoot := filepath.Clean(filepath.Join(configDir, ".."))
-	viper.AddConfigPath(repoRoot)
+		// repo root & current dir
+		_, thisFile, _, _ := runtime.Caller(0) // .../config/config.go
+		configDir := filepath.Dir(thisFile)    // .../config
+		repoRoot := filepath.Clean(filepath.Join(configDir, ".."))
+		viper.AddConfigPath(repoRoot)
 
-	// Current dir
-	viper.AddConfigPath(".")
+		// Current dir
+		viper.AddConfigPath(".")
+	}
 
 	// Read .env file if it exists
 	if err := viper.ReadInConfig(); err != nil {

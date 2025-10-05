@@ -43,14 +43,45 @@ func (h *SyncHandler) SyncAirport(w http.ResponseWriter, r *http.Request) {
 	data, err := h.service.SyncAirports(r.Context(), req)
 	if err != nil {
 		h.logger.Error("Failed to sync airports: ", err)
-		response := response_dto.ResponseDto{
-			Code:    http.StatusInternalServerError,
-			Status:  "Internal Server Error",
-			Data:    err.Error(),
-			Message: err.Error(),
+
+		switch err {
+		case util.ErrBadRequest:
+			response := response_dto.ResponseDto{
+				Code:    http.StatusBadRequest,
+				Status:  "Bad Request",
+				Data:    err.Error(),
+				Message: err.Error(),
+			}
+			util.WriteToResponseBody(w, http.StatusBadRequest, response)
+			return
+		case util.ErrGatewayTimeout:
+			response := response_dto.ResponseDto{
+				Code:    http.StatusGatewayTimeout,
+				Status:  "Gateway Timeout",
+				Data:    err.Error(),
+				Message: err.Error(),
+			}
+			util.WriteToResponseBody(w, http.StatusGatewayTimeout, response)
+			return
+		case util.ErrNotFound:
+			response := response_dto.ResponseDto{
+				Code:    http.StatusNotFound,
+				Status:  "Not Found",
+				Data:    err.Error(),
+				Message: err.Error(),
+			}
+			util.WriteToResponseBody(w, http.StatusNotFound, response)
+			return
+		default:
+			response := response_dto.ResponseDto{
+				Code:    http.StatusInternalServerError,
+				Status:  "Internal Server Error",
+				Data:    err.Error(),
+				Message: err.Error(),
+			}
+			util.WriteToResponseBody(w, http.StatusInternalServerError, response)
+			return
 		}
-		util.WriteToResponseBody(w, http.StatusInternalServerError, response)
-		return
 	}
 
 	h.logger.Debug("Successfully synced airports")

@@ -8,6 +8,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var (
+	GetMigrationStatus = database.GetMigrationStatus
+	runMigrations      = database.RunMigrations
+	rollbackMigrations = database.RollbackMigrations
+)
+
 type Migrations struct {
 	cfg    config.Config
 	logger *logger.Logger
@@ -20,12 +26,16 @@ func NewMigrations(cfg config.Config, logger *logger.Logger) *Migrations {
 	}
 }
 
+func (m *Migrations) GetLogger() *logger.Logger {
+	return m.logger
+}
+
 func (m *Migrations) HandleMigrations(down bool, status bool) {
 	m.logger.Info("Starting migration process...")
 
 	if status {
 		m.logger.Info("Checking migration status")
-		version, dirty, err := database.GetMigrationStatus(m.cfg.DatabaseURL, "migrations")
+		version, dirty, err := GetMigrationStatus(m.cfg.DatabaseURL, "migrations")
 
 		if err != nil {
 			m.logger.Fatalw(logrus.Fields{"error": err}, "Failed to get migration status")
@@ -46,7 +56,7 @@ func (m *Migrations) HandleMigrations(down bool, status bool) {
 
 	if down {
 		m.logger.Info("Rolling back migrations")
-		if err := database.RollbackMigrations(m.cfg.DatabaseURL, "migrations"); err != nil {
+		if err := rollbackMigrations(m.cfg.DatabaseURL, "migrations"); err != nil {
 			m.logger.Fatalw(logrus.Fields{
 				"error": err,
 			}, "Failed to rollback migration")
@@ -54,7 +64,7 @@ func (m *Migrations) HandleMigrations(down bool, status bool) {
 		m.logger.Info("Successfully rolled back migrations")
 	} else {
 		m.logger.Info("Running migrations")
-		if err := database.RunMigrations(m.cfg.DatabaseURL, "migrations"); err != nil {
+		if err := runMigrations(m.cfg.DatabaseURL, "migrations"); err != nil {
 			m.logger.Fatalw(logrus.Fields{
 				"error": err,
 			}, "Failed to run migrations")
