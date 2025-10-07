@@ -315,8 +315,14 @@ func (r *AirportRepository) FindExistsByICAOID(ctx context.Context, tx *sql.Tx, 
 	err := row.Scan(&exists)
 	if err == sql.ErrNoRows {
 		return false, nil
+	} else if err != nil {
+		r.logger.Errorf("Error checking existence of ICAO ID %s: %v", icaoId, err)
+		panic(err)
 	}
-	util.PanicIfError(err)
+
+	if exists != 1 {
+		return false, nil
+	}
 
 	return true, nil
 }
