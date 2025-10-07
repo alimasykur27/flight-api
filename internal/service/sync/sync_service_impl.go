@@ -48,88 +48,122 @@ func (s *SyncService) SyncAirports(
 	}
 	s.logger.Debug("[SyncAirports] request validated")
 
-	// Check if ICAO codes are exists on the database.
-	// If not, fetch data from Aviation API and store it in the database.
-	// If exists, skip fetching data from Aviation API.
-	var icaoCodesToFetch []string
-	results := make([]sync_dto.SyncAirportResponse, 0)
-
-	s.logger.Debug("[SyncAirports] Checking existing ICAO codes in the database...")
-
 	tx, err := s.db.Begin()
 	util.PanicIfError(err)
 	defer util.CommitOrRollback(tx)
 
-	for _, code := range req.ICAOCodes {
+	// Prepare list of ICAO codes to fetch from Aviation API
+	var icaoCodesToFetch []string
+	SyncAirportResponse := make([]sync_dto.SyncAirportResponse, 0)
+
+	// Remove duplicate ICAO codes from the request
+	ICAOCodes := util.RemoveDuplicate(req.ICAOCodes)
+
+	s.logger.Debug("[SyncAirports] Checking existing ICAO codes in the database...")
+	for _, code := range ICAOCodes {
 		exists, err := s.airportRepository.FindExistsByICAOID(ctx, tx, code)
 		if err != nil {
 			s.logger.Errorf("[SyncAirports] failed to check if ICAO code %s exists: %v", code, err)
-			return nil, err
-		}
-		if !exists {
-			s.logger.Debugf("[SyncAirports] ICAO code %s does not exist in the database.", code)
-			icaoCodesToFetch = append(icaoCodesToFetch, code)
-		} else {
-			result := sync_dto.SyncAirportResponse{
+			res := sync_dto.SyncAirportResponse{
 				ICAOCode: code,
 				Airport:  nil,
-				Status:   "Skipped",
+				Status:   "Error",
+				Message:  "Failed to check if ICAO code exists: " + err.Error(),
+			}
+			SyncAirportResponse = append(SyncAirportResponse, res)
+			continue
+		}
+
+		if exists {
+			res := sync_dto.SyncAirportResponse{
+				ICAOCode: code,
+				Airport:  nil,
+				Status:   "Conflict",
 				Message:  "ICAO code already exists in the database. Skipping fetch.",
 			}
-			results = append(results, result)
+			SyncAirportResponse = append(SyncAirportResponse, res)
 			s.logger.Debugf("[SyncAirports] ICAO code %s already exists in the database. Skipping fetch.", code)
+			continue
 		}
+
+		icaoCodesToFetch = append(icaoCodesToFetch, code)
+		s.logger.Debugf("[SyncAirports] ICAO code %s does not exist in the database.", code)
 	}
 
 	// Fetch data from Aviation API.
 	s.logger.Debugf("[SyncAirports] Fetching data for ICAO codes: %v", icaoCodesToFetch)
-	airportData, err := s.aviationService.FetchAirportData(ctx, icaoCodesToFetch)
-	if err != nil {
-		s.logger.Errorf("[SyncAirports] failed to fetch airport data from Aviation API: %v", err)
-		return nil, err
+	var fetchedAirportData map[string]airport_dto.AirportRequestDto
+
+	for _, code := range icaoCodesToFetch {
+		data, err := s.aviationService.FetchAirportData(ctx, []string{code})
+		if err != nil {
+			s.logger.Errorf("[SyncAirports] failed to fetch airport data for ICAO code %s from Aviation API: %v", code, err)
+			res := sync_dto.SyncAirportResponse{
+				ICAOCode: code,
+				Airport:  nil,
+				Status:   "Error",
+				Message:  "Failed to fetch airport data from Aviation API: " + err.Error(),
+			}
+			SyncAirportResponse = append(SyncAirportResponse, res)
+			continue
+		}
+
+		if len(data) == 0 {
+			s.logger.Warnf("[SyncAirports] No data found for ICAO code %s from Aviation API. Skipping...", code)
+			res := sync_dto.SyncAirportResponse{
+				ICAOCode: code,
+				Airport:  nil,
+				Status:   "Not Found",
+				Message:  "No data found from Aviation API.",
+			}
+			SyncAirportResponse = append(SyncAirportResponse, res)
+			continue
+		}
+
+		if fetchedAirportData == nil {
+			fetchedAirportData = make(map[string]airport_dto.AirportRequestDto)
+		}
+
+		for k, v := range data {
+			fetchedAirportData[k] = v
+		}
 	}
 	s.logger.Debug("[SyncAirports] successfully fetched airport data from Aviation API")
 
 	// Store fetched data in the database.
 	s.logger.Debug("[SyncAirports] Storing fetched airport data in the database...")
 
-	for _, code := range icaoCodesToFetch {
-		data, exists := airportData[code]
-
-		// If data is empty struct or nil, and not exists, skip inserting to the database.
-		if !exists || (data == airport_dto.AirportRequestDto{}) {
-			s.logger.Warnf("[SyncAirports] No data found for ICAO code %s from Aviation API. Skipping...", code)
-			result := sync_dto.SyncAirportResponse{
-				ICAOCode: code,
-				Airport:  nil,
-				Status:   "Not Found",
-				Message:  "No data found from Aviation API.",
-			}
-			results = append(results, result)
-			continue
-		}
+	for code, data := range fetchedAirportData {
+		s.logger.Debugf("[SyncAirports] Fetched data for ICAO code %s: %+v", code, data)
 
 		airportPayload := airport_dto.AirportRequestToAirport(data)
 		airportModel, err := s.airportRepository.Insert(ctx, tx, airportPayload)
 
 		if err != nil {
 			s.logger.Errorf("[SyncAirports] failed to insert airport data for ICAO code %s: %v", code, err)
-			return nil, err
+			result := sync_dto.SyncAirportResponse{
+				ICAOCode: code,
+				Airport:  nil,
+				Status:   "Error",
+				Message:  "Failed to insert airport data: " + err.Error(),
+			}
+			SyncAirportResponse = append(SyncAirportResponse, result)
+			continue
 		}
 
 		s.logger.Debugf("[SyncAirports] Successfully inserted airport data for ICAO code %s", code)
 		airportDto := airport_dto.ToAirportDto(airportModel)
-		result := sync_dto.SyncAirportResponse{
+		res := sync_dto.SyncAirportResponse{
 			ICAOCode: code,
 			Airport:  &airportDto,
 			Status:   "Inserted",
 			Message:  "Airport data successfully inserted",
 		}
-		results = append(results, result)
+		SyncAirportResponse = append(SyncAirportResponse, res)
 
 		s.logger.Debugf("[SyncAirports] Airport data for ICAO code %s Inserted", code)
 	}
 
 	s.logger.Debugf("[SyncAirports] Successfully synced airport data")
-	return results, err
+	return SyncAirportResponse, err
 }

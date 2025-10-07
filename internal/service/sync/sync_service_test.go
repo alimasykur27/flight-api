@@ -3,6 +3,7 @@ package service_sync
 import (
 	"context"
 	"database/sql"
+	"errors"
 	airport_dto "flight-api/internal/dto/airport"
 	sync_dto "flight-api/internal/dto/sync"
 	"flight-api/internal/model"
@@ -86,7 +87,7 @@ func TestSyncAirports_Mixed_OneInserted_OneSkipped(t *testing.T) {
 
 	// Urutan hasil: sesuai loop ICAO di req
 	require.Equal(t, "KJFK", out[0].ICAOCode)
-	require.Equal(t, "Skipped", out[0].Status)
+	require.Equal(t, "Conflict", out[0].Status)
 	require.Nil(t, out[0].Airport)
 
 	require.Equal(t, "KSEA", out[1].ICAOCode)
@@ -159,11 +160,13 @@ func TestSyncAirports_ErrorOnExistsCheck_ReturnsError(t *testing.T) {
 		mock.Anything,
 		mock.MatchedBy(func(tx *sql.Tx) bool { return tx != nil }),
 		"KJFK",
-	).Return(false, assertErr("db failure")).Once()
+	).Return(false, errors.New("db failure")).Once()
 
-	out, err := svc.SyncAirports(context.Background(), req)
-	require.Error(t, err)
-	require.Nil(t, out)
+	out, _ := svc.SyncAirports(context.Background(), req)
+
+	require.Len(t, out, 1)
+	require.Equal(t, "KJFK", out[0].ICAOCode)
+	require.Equal(t, "Error", out[0].Status)
 
 	// Aviation & Insert tidak terpanggil
 	avi.Mock.AssertNotCalled(t, "FetchAirportData", mock.Anything, mock.Anything)
@@ -198,9 +201,21 @@ func TestSyncAirports_ErrorOnAviationFetch_ReturnsError(t *testing.T) {
 		Once()
 
 	out, err := svc.SyncAirports(context.Background(), req)
-	require.Error(t, err)
-	require.Nil(t, out)
+	require.NoError(t, err)
+	require.Len(t, out, 2)
 
+	// KPDX conflict
+	require.Equal(t, "KPDX", out[0].ICAOCode)
+	require.Equal(t, "Conflict", out[0].Status)
+	require.Nil(t, out[0].Airport)
+
+	// KSEA error
+	require.Equal(t, "KSEA", out[1].ICAOCode)
+	require.Equal(t, "Error", out[1].Status)
+	require.Nil(t, out[1].Airport)
+	require.Contains(t, out[1].Message, "aviation timeout")
+
+	// Tidak ada upsert
 	repo.Mock.AssertNotCalled(t, "Insert", mock.Anything, mock.Anything, mock.Anything)
 	require.NoError(t, dbmock.ExpectationsWereMet())
 	repo.Mock.AssertExpectations(t)
@@ -248,9 +263,13 @@ func TestSyncAirports_ErrorOnInsert_ReturnsError(t *testing.T) {
 	).Return(model.Airport{}, assertErr("insert failed")).Once()
 
 	out, err := svc.SyncAirports(context.Background(), req)
-	require.Error(t, err)
-	require.Nil(t, out)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Equal(t, "KLAX", out[0].ICAOCode)
+	require.Equal(t, "Error", out[0].Status)
+	require.Nil(t, out[0].Airport)
 
+	repo.Mock.AssertNumberOfCalls(t, "Insert", 1)
 	require.NoError(t, dbmock.ExpectationsWereMet())
 	repo.Mock.AssertExpectations(t)
 	avi.Mock.AssertExpectations(t)
