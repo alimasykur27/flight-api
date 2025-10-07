@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	airport_dto "flight-api/internal/dto/airport"
 	"flight-api/internal/enum"
 	"flight-api/internal/model"
@@ -980,7 +981,7 @@ func TestAirportRepository_FindByICAOID(t *testing.T) {
 
 // ---------- UNIT TESTS FOR FindExistsByICAOID ----------
 func TestAirportRepository_FindExistsByICAOID(t *testing.T) {
-	updateQ := regexp.QuoteMeta(`SELECT 1 FROM airports WHERE icao_id = $1 LIMIT 1`)
+	checkExistsQuery := regexp.QuoteMeta(`SELECT 1 FROM airports WHERE icao_id = $1 LIMIT 1`)
 
 	cases := []struct {
 		name      string
@@ -994,7 +995,7 @@ func TestAirportRepository_FindExistsByICAOID(t *testing.T) {
 			icao: "KAAA",
 			setupMock: func(m sqlmock.Sqlmock) {
 				rows := sqlmock.NewRows([]string{"exists"}).AddRow(1)
-				m.ExpectQuery(updateQ).
+				m.ExpectQuery(checkExistsQuery).
 					WithArgs("KAAA").
 					WillReturnRows(rows)
 			},
@@ -1002,11 +1003,23 @@ func TestAirportRepository_FindExistsByICAOID(t *testing.T) {
 			expectErr: false,
 		},
 		{
+			name: "exists is not 1",
+			icao: "KBBB",
+			setupMock: func(m sqlmock.Sqlmock) {
+				rows := sqlmock.NewRows([]string{"exists"}).AddRow(99) // nilai selain 1
+				m.ExpectQuery(checkExistsQuery).
+					WithArgs("KBBB").
+					WillReturnRows(rows)
+			},
+			expectOK:  false,
+			expectErr: false,
+		},
+		{
 			name: "not found",
 			icao: "KZZZ",
 			setupMock: func(m sqlmock.Sqlmock) {
 				// QueryRowContext -> Scan akan terima sql.ErrNoRows
-				m.ExpectQuery(updateQ).
+				m.ExpectQuery(checkExistsQuery).
 					WithArgs("KZZZ").
 					WillReturnError(sql.ErrNoRows)
 				// Alternatif: WillReturnRows(sqlmock.NewRows([]string{"exists"})) juga oke
@@ -1018,9 +1031,9 @@ func TestAirportRepository_FindExistsByICAOID(t *testing.T) {
 			name: "db error -> panic",
 			icao: "KERR",
 			setupMock: func(m sqlmock.Sqlmock) {
-				m.ExpectQuery(updateQ).
+				m.ExpectQuery(checkExistsQuery).
 					WithArgs("KERR").
-					WillReturnError(fmt.Errorf("boom"))
+					WillReturnError(errors.New("boom"))
 			},
 			expectOK:  false,
 			expectErr: true, // kita expect panic
