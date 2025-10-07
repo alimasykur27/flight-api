@@ -482,7 +482,7 @@ func TestFetchAirportData_Error_Timeout(t *testing.T) {
 }
 
 func TestFetchAirportData_Error_InternalServer(t *testing.T) {
-	// Transport mengembalikan error biasa (bukan *url.Error, bukan net.Error)
+	// Transport that returns error on any request
 	rt := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		return nil, errors.New("weird client error")
 	})
@@ -495,12 +495,8 @@ func TestFetchAirportData_Error_InternalServer(t *testing.T) {
 	}
 
 	_, err := svc.FetchAirportData(context.Background(), []string{"WIII"})
-	if err == nil {
-		t.Fatalf("expected error")
-	}
-	if !errors.Is(err, util.ErrInternalServer) {
-		t.Fatalf("expected ErrInternalServer, got %v", err)
-	}
+	assert.NotNil(t, err, "expected error")
+	assert.ErrorIs(t, err, util.ErrInternalServer, "expected ErrInternalServer")
 }
 
 func TestFetchAirportData_ReadBodyError(t *testing.T) {
@@ -522,11 +518,6 @@ func TestFetchAirportData_ReadBodyError(t *testing.T) {
 	}
 
 	_, err := svc.FetchAirportData(context.Background(), []string{"WIII"})
-	if err == nil {
-		t.Fatalf("expected error")
-	}
-
-	if !errors.Is(err, util.ErrInternalServer) {
-		t.Fatalf("expected ErrInternalServer, got %v", err)
-	}
+	assert.NotNil(t, err, "expected error")
+	assert.ErrorIs(t, err, util.ErrInternalServer, "expected ErrInternalServer")
 }

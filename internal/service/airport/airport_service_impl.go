@@ -7,7 +7,6 @@ import (
 	pagination_dto "flight-api/internal/dto/pagination"
 	queryparams "flight-api/internal/dto/query_params"
 	weather_dto "flight-api/internal/dto/weather"
-	"flight-api/internal/model"
 	repository_airport "flight-api/internal/repository/airport"
 	service_weather "flight-api/internal/service/weather"
 
@@ -129,10 +128,11 @@ func (s *AirportService) Update(ctx context.Context, id string, u dto.AirportUpd
 		util.PanicIfError(err)
 	}
 
-	s.fillUpdatableFields(&airport, u)
+	util.FillUpdatableFields(&airport, u)
 	updatedAirport, err := s.airportRepository.Update(ctx, tx, id, airport)
 	util.PanicIfError(err)
 
+	s.logger.Debugf("[Update] Airport updated: %+v", updatedAirport)
 	return dto.ToAirportDto(updatedAirport), nil
 }
 
@@ -266,33 +266,4 @@ func (s *AirportService) getWeatherConditionBySearchName(ctx context.Context, na
 	}
 
 	return &result, nil
-}
-
-func (s *AirportService) fillUpdatableFields(airport *model.Airport, u dto.AirportUpdateDto) {
-	s.logger.Debug("[fillUpdatableFields] Filling updatable fields...")
-
-	util.UpdateString(&airport.SiteNumber, u.SiteNumber)
-	util.UpdateString(&airport.FAAID, u.FAAID)
-	util.UpdateString(&airport.IATAID, u.IATAID)
-	util.UpdateString(&airport.Name, u.Name)
-	util.UpdateString(&airport.Type, (*string)(u.Type))
-	util.UpdateBool(&airport.Status, u.Status)
-	util.UpdateString(&airport.Country, u.Country)
-	util.UpdateString(&airport.State, u.State)
-	util.UpdateString(&airport.StateFull, u.StateFull)
-	util.UpdateString(&airport.County, u.County)
-	util.UpdateString(&airport.City, u.City)
-	util.UpdateString(&airport.Ownership, (*string)(u.Ownership))
-	util.UpdateString(&airport.Use, (*string)(u.Use))
-	util.UpdateString(&airport.Manager, u.Manager)
-	util.UpdateString(&airport.ManagerPhone, u.ManagerPhone)
-	util.UpdateString(&airport.Latitude, u.Latitude)
-	util.UpdateString(&airport.LatitudeSec, u.LatitudeSec)
-	util.UpdateString(&airport.Longitude, u.Longitude)
-	util.UpdateString(&airport.LongitudeSec, u.LongitudeSec)
-	util.UpdateInt(&airport.Elevation, u.Elevation)
-	util.UpdateBool(&airport.ControlTower, u.ControlTower)
-	util.UpdateString(&airport.Unicom, u.Unicom)
-	util.UpdateString(&airport.CTAF, u.CTAF)
-	util.UpdateTime(&airport.EffectiveDate, u.EffectiveDate)
 }

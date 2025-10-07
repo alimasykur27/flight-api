@@ -6,6 +6,7 @@ import (
 	"flight-api/internal/model"
 	"flight-api/pkg/logger"
 	"flight-api/util"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -27,13 +28,13 @@ func (r *AirportRepository) Insert(ctx context.Context, tx *sql.Tx, airport mode
 			country, state, state_full, county, city,
 			ownership, "use", manager, manager_phone,
 			latitude, latitude_sec, longitude, longitude_sec,
-			elevation, control_tower, unicom, ctaf
+			elevation, control_tower, unicom, ctaf, effective_date
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12,
 			$13, $14, $15, $16,
 			$17, $18, $19, $20,
-			$21, $22, $23, $24
+			$21, $22, $23, $24, $25
 		)
 		RETURNING id`
 
@@ -64,6 +65,7 @@ func (r *AirportRepository) Insert(ctx context.Context, tx *sql.Tx, airport mode
 		airport.ControlTower,
 		airport.Unicom,
 		airport.CTAF,
+		airport.EffectiveDate,
 	)
 
 	var id string
@@ -72,6 +74,7 @@ func (r *AirportRepository) Insert(ctx context.Context, tx *sql.Tx, airport mode
 	result, err := r.FindByID(ctx, tx, id)
 	util.PanicIfError(err)
 
+	r.logger.Debug("Inserted airport with ID:", id)
 	return result, nil
 }
 
@@ -82,13 +85,15 @@ func (r *AirportRepository) SyncAirport(ctx context.Context, tx *sql.Tx, airport
 			country, state, state_full, county, city,
 			ownership, "use", manager, manager_phone,
 			latitude, latitude_sec, longitude, longitude_sec,
-			elevation, control_tower, unicom, ctaf, sync_status
+			elevation, control_tower, unicom, ctaf, effective_date,
+			status
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12,
 			$13, $14, $15, $16,
 			$17, $18, $19, $20,
-			$21, $22, $23, $24, 1
+			$21, $22, $23, $24, $25,
+			1
 		)
 		RETURNING id`
 
@@ -119,6 +124,7 @@ func (r *AirportRepository) SyncAirport(ctx context.Context, tx *sql.Tx, airport
 		airport.ControlTower,
 		airport.Unicom,
 		airport.CTAF,
+		airport.EffectiveDate,
 	)
 
 	var id string
@@ -127,6 +133,7 @@ func (r *AirportRepository) SyncAirport(ctx context.Context, tx *sql.Tx, airport
 	result, err := r.FindByID(ctx, tx, id)
 	util.PanicIfError(err)
 
+	r.logger.Debugf("Inserted airport with ID: %s", id)
 	return result, nil
 }
 
@@ -135,7 +142,7 @@ func (r *AirportRepository) FindByID(ctx context.Context, tx *sql.Tx, id string)
 SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
 	country, state, state_full, county, city, ownership, "use",
 	manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
-	control_tower, unicom, ctaf, created_at, updated_at
+	control_tower, unicom, ctaf, effective_date, created_at, updated_at
 FROM airports 
 WHERE id = $1 
 LIMIT 1
@@ -179,6 +186,7 @@ LIMIT 1
 			&airport.ControlTower,
 			&airport.Unicom,
 			&airport.CTAF,
+			&airport.EffectiveDate,
 			&airport.CreatedAt,
 			&airport.UpdatedAt,
 		)
@@ -199,7 +207,7 @@ func (r *AirportRepository) FindAll(ctx context.Context, tx *sql.Tx, args map[st
 	LIMIT $1
 	OFFSET $2`
 
-	rows, err := tx.QueryContext(ctx, SQL, limit, offset)
+	rows, err := tx.QueryContext(ctx, strings.TrimSpace(SQL), limit, offset)
 	util.PanicIfError(err)
 	defer rows.Close()
 
@@ -224,7 +232,6 @@ func (r *AirportRepository) FindAll(ctx context.Context, tx *sql.Tx, args map[st
 
 	var total int
 	TotalSQL := `SELECT COUNT(*) FROM airports`
-
 	row := tx.QueryRowContext(ctx, TotalSQL)
 	err = row.Scan(&total)
 	util.PanicIfError(err)
@@ -238,18 +245,17 @@ func (r *AirportRepository) FindBySearchName(ctx context.Context, tx *sql.Tx, na
 	limit, offset := util.ParsePagination(args)
 	searchName := "%" + name + "%"
 
-	SQL := `
-SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
-	country, state, state_full, county, city, ownership, "use",
-	manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
-	control_tower, unicom, ctaf, created_at, updated_at
-FROM airports 
-WHERE LOWER(name) LIKE LOWER($3)
-ORDER BY icao_id
-LIMIT $1
-OFFSET $2`
+	SQL := `SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
+			country, state, state_full, county, city, ownership, "use",
+			manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
+			control_tower, unicom, ctaf, effective_date, created_at, updated_at
+		FROM airports 
+		WHERE LOWER(name) LIKE LOWER($3)
+		ORDER BY icao_id
+		LIMIT $1
+		OFFSET $2`
 
-	rows, err := tx.QueryContext(ctx, SQL, limit, offset, searchName)
+	rows, err := tx.QueryContext(ctx, strings.TrimSpace(SQL), limit, offset, searchName)
 	util.PanicIfError(err)
 	defer rows.Close()
 
@@ -282,6 +288,7 @@ OFFSET $2`
 			&airport.ControlTower,
 			&airport.Unicom,
 			&airport.CTAF,
+			&airport.EffectiveDate,
 			&airport.CreatedAt,
 			&airport.UpdatedAt,
 		)
@@ -315,21 +322,19 @@ func (r *AirportRepository) FindExistsByICAOID(ctx context.Context, tx *sql.Tx, 
 }
 
 func (r *AirportRepository) FindByICAOID(ctx context.Context, tx *sql.Tx, icaoId string) (model.Airport, error) {
-	SQL := `
-SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
-	country, state, state_full, county, city, ownership, "use",
-	manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
-	control_tower, unicom, ctaf, created_at, updated_at
-FROM airports 
-WHERE icao_id = $1 
-LIMIT 1
-`
+	SQL := `SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
+			country, state, state_full, county, city, ownership, "use",
+			manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
+			control_tower, unicom, ctaf, effective_date, created_at, updated_at
+		FROM airports 
+		WHERE icao_id = $1 
+		LIMIT 1`
 
-	rows, err := tx.QueryContext(ctx, SQL, icaoId)
+	rows, err := tx.QueryContext(ctx, strings.TrimSpace(SQL), icaoId)
 	if err == sql.ErrNoRows {
 		return model.Airport{}, util.ErrNotFound
 	}
-	defer rows.Close()
+	util.PanicIfError(err)
 
 	airport := model.Airport{}
 	if rows.Next() {
@@ -359,6 +364,7 @@ LIMIT 1
 			&airport.ControlTower,
 			&airport.Unicom,
 			&airport.CTAF,
+			&airport.EffectiveDate,
 			&airport.CreatedAt,
 			&airport.UpdatedAt,
 		)
@@ -368,6 +374,7 @@ LIMIT 1
 		return model.Airport{}, util.ErrNotFound
 	}
 }
+
 func (r *AirportRepository) Update(ctx context.Context, tx *sql.Tx, id string, airport model.Airport) (model.Airport, error) {
 	SQL := `
 		UPDATE airports SET
@@ -407,7 +414,7 @@ func (r *AirportRepository) Update(ctx context.Context, tx *sql.Tx, id string, a
 
 	row := tx.QueryRowContext(
 		ctx,
-		SQL,
+		strings.TrimSpace(SQL),
 		airport.SiteNumber,
 		airport.FAAID,
 		airport.IATAID,
@@ -467,17 +474,4 @@ func (r *AirportRepository) Delete(ctx context.Context, tx *sql.Tx, id string) e
 	}
 
 	return nil
-}
-
-func parseAirportQuery(args map[string]interface{}) string {
-	name := ""
-
-	if len(args) > 0 {
-		// Get name
-		if val, ok := args["name"]; ok {
-			name = val.(string)
-		}
-	}
-
-	return name
 }

@@ -54,6 +54,13 @@ func (h *WeatherHandler) GetWeatherCondition(w http.ResponseWriter, r *http.Requ
 		h.logger.Errorf("Failed to get weather condition: %v", err)
 
 		switch err {
+		case util.ErrUnauthorized:
+			response = response_dto.ResponseDto{
+				Code:    http.StatusUnauthorized,
+				Status:  "Unauthorized",
+				Data:    nil,
+				Message: "Unauthorized",
+			}
 		case util.ErrNotFound:
 			response = response_dto.ResponseDto{
 				Code:    http.StatusNotFound,
@@ -67,6 +74,13 @@ func (h *WeatherHandler) GetWeatherCondition(w http.ResponseWriter, r *http.Requ
 				Status:  "Bad Request",
 				Data:    nil,
 				Message: "Bad Request",
+			}
+		case util.ErrGatewayTimeout:
+			response = response_dto.ResponseDto{
+				Code:    http.StatusGatewayTimeout,
+				Status:  "Gateway Timeout",
+				Data:    nil,
+				Message: "Gateway Timeout",
 			}
 		default:
 			response = response_dto.ResponseDto{

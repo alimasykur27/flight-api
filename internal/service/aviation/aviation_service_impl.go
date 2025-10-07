@@ -55,6 +55,7 @@ func (s *AviationService) FetchAirportData(ctx context.Context, icaoCodes []stri
 		return nil, util.ErrInternalServer
 
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {

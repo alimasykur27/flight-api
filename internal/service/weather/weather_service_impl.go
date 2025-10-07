@@ -2,14 +2,17 @@ package service_weather
 
 import (
 	"context"
+	"errors"
 	"flight-api/config"
 	weather_dto "flight-api/internal/dto/weather"
 	"flight-api/pkg/logger"
 	"flight-api/util"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type WeatherService struct {
@@ -22,7 +25,9 @@ func NewWeatherService(logger *logger.Logger, cfg *config.Config) IWeatherServic
 	return &WeatherService{
 		logger: logger,
 		cfg:    cfg,
-		client: &http.Client{},
+		client: &http.Client{
+			Timeout: 60 * time.Second,
+		},
 	}
 }
 
@@ -35,16 +40,20 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 		return nil, util.ErrBadRequest
 	}
 
-	currentWeatherUrl := s.cfg.WeatherURL + "/v1/current.json"
-
 	location := url.QueryEscape(strings.ToUpper(*loc))
+	currentWeatherUrl := s.cfg.WeatherURL + "/v1/current.json"
 	URL := currentWeatherUrl + "?key=" + s.cfg.WeatherAPIKey + "&q=" + location
 
 	s.logger.Debugf("[GetWeatherCondition] Location: %s", *loc)
 	resp, err := s.client.Get(URL)
-
-	if err == http.ErrHandlerTimeout {
+	if err != nil {
 		s.logger.Errorf("[GetWeatherCondition] Failed to fetch weather data: %v", err)
+
+		var ne net.Error
+		if errors.As(err, &ne) && ne.Timeout() {
+			return nil, util.ErrGatewayTimeout
+		}
+
 		return nil, util.ErrInternalServer
 	}
 
@@ -54,10 +63,10 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 		s.logger.Errorf("[GetWeatherCondition] Failed to fetch weather data: %s", resp.Status)
 
 		errBody, _ := io.ReadAll(resp.Body)
-
 		var errData map[string]map[string]interface{}
 		err = util.ParseJSON(errBody, &errData)
 		if err != nil {
+			s.logger.Errorf("[GetWeatherCondition] Failed to unmarshal error response body: %v", err)
 			return nil, util.ErrInternalServer
 		}
 
@@ -67,15 +76,22 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 			return nil, util.ErrInternalServer
 		}
 
-		if errorCode == 1006 {
-			s.logger.Debug("[GetWeatherCondition] Error code: ", errorCode)
+		switch errorCode {
+		case 1006:
+			s.logger.Error("[GetWeatherCondition] Error code: ", errorCode)
 			return nil, util.ErrNotFound
+		case 1003:
+			s.logger.Error("[GetWeatherCondition] Error code: ", errorCode)
+			return nil, util.ErrBadRequest
+		case 1002:
+			s.logger.Error("[GetWeatherCondition] Error code: ", errorCode)
+			return nil, util.ErrUnauthorized
+		default:
+			return nil, util.ErrBadRequest
 		}
-
-		return nil, util.ErrBadRequest
 	}
-	s.logger.Debug("[GetWeatherCondition] Successfully fetched weather data.")
 
+	s.logger.Debug("[GetWeatherCondition] Successfully fetched weather data.")
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		s.logger.Errorf("[GetWeatherCondition] Failed to read response body: %v", err)

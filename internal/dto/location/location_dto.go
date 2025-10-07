@@ -2,7 +2,7 @@ package location_dto
 
 type LocationDto struct {
 	Name           *string  `json:"name"`
-	Eegion         *string  `json:"region"`
+	Region         *string  `json:"region"`
 	Country        *string  `json:"country"`
 	Lat            *float64 `json:"lat"`
 	Lon            *float64 `json:"lon"`

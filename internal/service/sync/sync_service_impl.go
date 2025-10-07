@@ -3,7 +3,6 @@ package service_sync
 import (
 	"context"
 	"database/sql"
-	"flight-api/config"
 	airport_dto "flight-api/internal/dto/airport"
 	sync_dto "flight-api/internal/dto/sync"
 	repo_airport "flight-api/internal/repository/airport"
@@ -17,7 +16,6 @@ import (
 type SyncService struct {
 	logger            *logger.Logger
 	validate          *validator.Validate
-	cfg               *config.Config
 	db                *sql.DB
 	airportRepository repo_airport.IAirportRepository
 	aviationService   service_aviation.IAviationService
@@ -26,7 +24,6 @@ type SyncService struct {
 func NewSyncService(
 	logger *logger.Logger,
 	validate *validator.Validate,
-	cfg *config.Config,
 	db *sql.DB,
 	airportRepository repo_airport.IAirportRepository,
 	aviationService service_aviation.IAviationService,
@@ -34,7 +31,6 @@ func NewSyncService(
 	return &SyncService{
 		logger:            logger,
 		validate:          validate,
-		cfg:               cfg,
 		db:                db,
 		airportRepository: airportRepository,
 		aviationService:   aviationService,

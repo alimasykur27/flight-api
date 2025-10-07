@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPtrConverter(t *testing.T) {
+func TestPtr(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    interface{}
@@ -36,21 +36,67 @@ func TestPtrConverter(t *testing.T) {
 			case string:
 				result := util.Ptr(tt.input.(string))
 				assert.Equal(t, v, *result, "Ptr(%v) = %v, want %v", tt.input, *result, v)
-				if *result != v {
-					t.Errorf("Ptr(%v) = %v, want %v", tt.input, *result, v)
-				}
 			case int:
 				result := util.Ptr(tt.input.(int))
 				assert.Equal(t, v, *result, "Ptr(%v) = %v, want %v", tt.input, *result, v)
-				if *result != v {
-					t.Errorf("Ptr(%v) = %v, want %v", tt.input, *result, v)
-				}
 			case bool:
 				result := util.Ptr(tt.input.(bool))
 				assert.Equal(t, v, *result, "Ptr(%v) = %v, want %v", tt.input, *result, v)
-				if *result != v {
-					t.Errorf("Ptr(%v) = %v, want %v", tt.input, *result, v)
-				}
+			}
+		})
+	}
+}
+
+func TestDeferPtr(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected interface{}
+	}{
+		{
+			name:     "string with value",
+			input:    util.Ptr("hello"),
+			expected: "hello",
+		},
+		{
+			name:     "string with nil",
+			input:    (*string)(nil),
+			expected: "",
+		},
+		{
+			name:     "int with value",
+			input:    util.Ptr(42),
+			expected: 42,
+		},
+		{
+			name:     "int with nil",
+			input:    (*int)(nil),
+			expected: 0,
+		},
+		{
+			name:     "bool with value",
+			input:    util.Ptr(true),
+			expected: true,
+		},
+		{
+			name:     "bool with nil",
+			input:    (*bool)(nil),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			switch v := tt.expected.(type) {
+			case string:
+				result := util.DerefPtr(tt.input.(*string))
+				assert.Equal(t, v, result, "DerefPtr(%v) = %v, want %v", tt.input, result, v)
+			case int:
+				result := util.DerefPtr(tt.input.(*int))
+				assert.Equal(t, v, result, "DerefPtr(%v) = %v, want %v", tt.input, result, v)
+			case bool:
+				result := util.DerefPtr(tt.input.(*bool))
+				assert.Equal(t, v, result, "DerefPtr(%v) = %v, want %v", tt.input, result, v)
 			}
 		})
 	}

@@ -20,8 +20,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE public.airports (
     id                          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    site_number                 VARCHAR(255) UNIQUE,                         -- FAA site number
-    icao_id                     VARCHAR(10) NOT NULL UNIQUE,
+    site_number                 VARCHAR(255),                         -- FAA site number
+    icao_id                     VARCHAR(10) NOT NULL,
     faa_id                      VARCHAR(10),
     iata_id                     VARCHAR(10),
     name                        VARCHAR(255),

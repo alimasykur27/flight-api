@@ -13,9 +13,11 @@ import (
 	_ "github.com/lib/pq"
 )
 
+var sqlOpen = sql.Open
+
 // Connect establishes a connection to the database
 func Connect(connectionString string) (*sql.DB, error) {
-	db, err := sql.Open("postgres", connectionString)
+	db, err := sqlOpen("postgres", connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -108,7 +110,7 @@ func RollbackMigrations(connectionString string, migrationsPath string) error {
 
 // Get current migrations version and dirty state
 func GetMigrationStatus(connectionString string, migrationsPath string) (uint, bool, error) {
-	db, err := sql.Open("postgres", connectionString)
+	db, err := sqlOpen("postgres", connectionString)
 	if err != nil {
 		return 0, false, err
 	}

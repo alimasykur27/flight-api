@@ -58,7 +58,7 @@ func main() {
 	weatherService := service_weather.NewWeatherService(logger, &cfg)
 	airportService := service_airport.NewAirportService(logger, validate, db, airportRepository, weatherService)
 	aviationService := service_aviation.NewAviationService(logger, &cfg)
-	syncService := service_sync.NewSyncService(logger, validate, &cfg, db, airportRepository, aviationService)
+	syncService := service_sync.NewSyncService(logger, validate, db, airportRepository, aviationService)
 
 	// Initialize Handlers
 	airportHandler := handler.NewAirportHandler(airportService, logger)

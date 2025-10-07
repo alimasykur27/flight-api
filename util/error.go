@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var ErrUnauthorized = errors.New("unauthorized")
 var ErrNotFound = errors.New("record not found")
 var ErrBadRequest = errors.New("bad request")
 var ErrGatewayTimeout = errors.New("gateway timeout")
