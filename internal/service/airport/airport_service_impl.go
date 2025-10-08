@@ -87,7 +87,10 @@ func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryPar
 	s.logger.Debug("[FindAll] Fetching all airports...")
 
 	tx, err := s.db.Begin()
-	util.PanicIfError(err)
+	if err != nil {
+		s.logger.Errorf("[FindAll] Failed to begin transaction: %v", err)
+		return pagination_dto.PaginationDto{}, util.ErrInternalServer
+	}
 	defer util.CommitOrRollback(tx)
 
 	args := map[string]interface{}{
@@ -95,13 +98,13 @@ func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryPar
 		"offset": query.Offset,
 	}
 	airports, total, err := s.airportRepository.FindAll(ctx, tx, args)
-	util.PanicIfError(err)
+	if err != nil {
+		s.logger.Errorf("[FindAll] Failed to fetch airports: %v", err)
+		return pagination_dto.PaginationDto{}, util.ErrInternalServer
+	}
 
 	airportRecords := airport_dto.ToAirportRecordDtos(airports)
-	records := make([]interface{}, len(airportRecords))
-	for i, v := range airportRecords {
-		records[i] = v
-	}
+	records := util.ToInterfaces(airportRecords)
 	hasNext := (query.Offset + query.Limit) < total
 
 	response := pagination_dto.PaginationDto{

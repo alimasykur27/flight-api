@@ -50,36 +50,11 @@ func (h *AirportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	airportResponse, err := h.airportService.Create(r.Context(), airportReq)
 	if err != nil {
 		h.logger.Errorf("[Create] Failed to create airport: %v", err)
-		switch err {
-		case util.ErrBadRequest:
-			response := response_dto.ResponseDto{
-				Code:    http.StatusBadRequest,
-				Status:  "Bad Request",
-				Data:    nil,
-				Message: fmt.Sprintf("Invalid request data: %v", err),
-			}
-			util.WriteToResponseBody(w, http.StatusBadRequest, response)
-			return
-		case util.ErrConflict:
-			response := response_dto.ResponseDto{
-				Code:    http.StatusConflict,
-				Status:  "Conflict",
-				Data:    nil,
-				Message: "Airport with the same ICAO ID already exists",
-			}
-			util.WriteToResponseBody(w, http.StatusConflict, response)
-			return
-		}
-		response := response_dto.ResponseDto{
-			Code:    http.StatusInternalServerError,
-			Status:  "Internal Server Error",
-			Data:    nil,
-			Message: err.Error(),
-		}
-		util.WriteToResponseBody(w, http.StatusInternalServerError, response)
+		util.ErrorHandler(w, err)
 		return
 	}
 
+	// Response (201 Created)
 	response := response_dto.ResponseDto{
 		Code:   http.StatusCreated,
 		Status: "Created",
@@ -93,7 +68,14 @@ func (h *AirportHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *AirportHandler) FindAll(w http.ResponseWriter, r *http.Request) {
 	query := queryparams.GetQueryParams(r)
 
-	airportResponses, _ := h.airportService.FindAll(r.Context(), query)
+	airportResponses, err := h.airportService.FindAll(r.Context(), query)
+	if err != nil {
+		h.logger.Errorf("[FindAll] Failed to fetch airports: %v", err)
+		util.ErrorHandler(w, err)
+		return
+	}
+
+	// Response (200 OK)
 	response := response_dto.ResponseDto{
 		Code:   http.StatusOK,
 		Status: "OK",
