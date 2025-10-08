@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"flight-api/config"
-	sync_dto "flight-api/internal/dto/sync"
+	airport_dto "flight-api/internal/dto/airport"
 	repository_airport "flight-api/internal/repository/airport"
-	service_aviation "flight-api/internal/service/aviation"
-	service_sync "flight-api/internal/service/sync"
+	service_airport "flight-api/internal/service/airport"
+	service_weather "flight-api/internal/service/weather"
 	"flight-api/pkg/database"
 	"flight-api/pkg/logger"
 	"flight-api/util"
@@ -72,11 +72,15 @@ func main() {
 	log := logger.NewLogger(logger.INFO_DEBUG_LEVEL)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
 	log.Info("Starting sync seed data...")
 
 	// Initialize Config
 	cfg, err := config.Load()
-	util.PanicIfError(err)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+		return
+	}
 
 	// Connect to database
 	log.Info("Connecting to database ...")
@@ -96,14 +100,8 @@ func main() {
 	airportRepository := repository_airport.NewAirportRepository(log)
 
 	// Initialize service
-	aviationService := service_aviation.NewAviationService(log, &cfg)
-	syncService := service_sync.NewSyncService(
-		log,
-		validate,
-		db,
-		airportRepository,
-		aviationService,
-	)
+	weatherService := service_weather.NewWeatherService(log, &cfg)
+	airportService := service_airport.NewAirportService(log, validate, db, airportRepository, weatherService)
 
 	// Read seed data from file
 	wd, err := os.Getwd()
@@ -125,22 +123,31 @@ func main() {
 	}
 	log.Infof("✅ Successfully read %d ICAO codes from %s", len(icaoCodes), seedPath)
 
-	req := sync_dto.SyncAirportRequest{
-		ICAOCodes: icaoCodes,
-	}
-
 	// Sync airports
 	log.Info("Seeding data from file:", seedPath)
 
 	start := time.Now()
-	result, err := syncService.SyncAirports(ctx, req)
+	// Use a goroutine to avoid blocking main thread
+	result := make(chan []airport_dto.AirportDto)
+	defer close(result)
+
+	go func() {
+		res, err := airportService.Seeding(ctx, icaoCodes)
+		if err != nil {
+			log.Errorf("Failed to seed data: %v", err)
+			result <- nil
+		}
+		result <- res
+	}()
+
+	var airports []airport_dto.AirportDto = <-result
 
 	if err != nil {
 		log.Fatalf("Failed to sync seed data: %v", err)
 	}
 
 	diff := time.Since(start)
-	log.Infof("✅ Successfully synced %d records in %v", len(result), diff)
+	log.Infof("Synced %d records in %v", len(airports), diff)
 
 	// Write to JSON file
 	binPath := filepath.Join(wd, "bin")
@@ -154,11 +161,11 @@ func main() {
 		}
 	}
 
-	err = writeJSON(outPath, result)
+	err = writeJSON(outPath, airports)
 	if err != nil {
 		log.Fatalf("Failed write json %v", err)
 	}
 
-	log.Infof("✅ Successfully wrote %d records to %s", len(result), outPath)
-	log.Infof("✅ Successfully Run Sync Seed Data")
+	log.Infof("✅ Successfully wrote %d records to %s", len(airports), outPath)
+	log.Infof("✅ Successfully Run Seeding Data")
 }
