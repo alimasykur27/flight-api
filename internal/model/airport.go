@@ -33,6 +33,8 @@ type Airport struct {
 	Unicom        *string    `db:"unicom"`
 	CTAF          *string    `db:"ctaf"`
 	EffectiveDate *time.Time `db:"effective_date"`
+	SyncStatus    *int64     `db:"sync_status"`
+	SyncMessage   *string    `db:"sync_message"`
 	CreatedAt     *time.Time `db:"created_at"`
 	UpdatedAt     *time.Time `db:"updated_at"`
 }

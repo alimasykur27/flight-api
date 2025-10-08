@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"flight-api/pkg/logger"
 	"fmt"
 	"os"
@@ -73,5 +74,10 @@ func Load() (config Config, err error) {
 	viper.SetDefault("SHUTDOWN_TIMEOUT", 5*time.Second)
 
 	err = viper.Unmarshal(&config)
-	return config, err
+	if err != nil {
+		err = errors.New("failed to parse config")
+		return config, err
+	}
+
+	return config, nil
 }
