@@ -27,7 +27,7 @@ func NewSyncHandler(service service_sync.ISyncService, logger *logger.Logger) IS
 func (h *SyncHandler) RegisterRouter(r chi.Router) {
 	routes := func(r chi.Router) {
 		// Sync Airport Data
-		r.Post("/airports", h.SyncAirport)
+		// r.Post("/airports", h.SyncAirport)
 	}
 
 	// Sync Endpoints

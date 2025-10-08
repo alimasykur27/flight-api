@@ -35,7 +35,7 @@ func (h *AirportHandler) RegisterRouter(r chi.Router) {
 		r.Get("/{id}", h.FindByID)
 		r.Put("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
-		r.Get("/weathers", h.GetWeatherCondition)
+		// r.Get("/weathers", h.GetWeatherCondition)
 	}
 
 	// Airports Endpoints
