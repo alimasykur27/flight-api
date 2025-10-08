@@ -78,11 +78,6 @@ migrate-down:
 migrate-status:
 	go run ./cmd/migrate/main.go --status
 
-# Sync seed data
-sync-seed:
-	mkdir -p $(BINARY_DIR)
-	go run ./cmd/sync/main.go
-
 .PHONY: 
 	all \
 	build \
@@ -99,4 +94,3 @@ sync-seed:
 	migrate-up \
 	migrate-down \
 	migrate-status \
-	sync-seed \

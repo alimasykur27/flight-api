@@ -3,7 +3,7 @@ package service_airport
 import (
 	"context"
 	"database/sql"
-	dto "flight-api/internal/dto/airport"
+	airport_dto "flight-api/internal/dto/airport"
 	pagination_dto "flight-api/internal/dto/pagination"
 	queryparams "flight-api/internal/dto/query_params"
 	weather_dto "flight-api/internal/dto/weather"
@@ -40,29 +40,57 @@ func NewAirportService(
 	}
 }
 
-func (s *AirportService) Create(ctx context.Context, r dto.AirportRequestDto) dto.AirportDto {
+func (s *AirportService) Seeding(ctx context.Context, reqs []string) ([]airport_dto.AirportDto, error) {
+	s.logger.Debug("[Seeding] Seeding airport data...")
+
+	return nil, nil
+}
+
+func (s *AirportService) Create(ctx context.Context, r airport_dto.AirportRequestDto) (airport_dto.AirportDto, error) {
 	s.logger.Debug("[Create] Creating new airport...")
 
 	err := s.validate.Struct(r)
-	util.PanicIfError(err)
+	if err != nil {
+		return airport_dto.AirportDto{}, nil
+	}
 
 	tx, err := s.db.Begin()
-	util.PanicIfError(err)
+	if err != nil {
+		s.logger.Errorf("[Create] Failed to begin transaction: %v", err)
+		return airport_dto.AirportDto{}, util.ErrInternalServer
+	}
 	defer util.CommitOrRollback(tx)
 
-	airport := dto.AirportRequestToAirport(r)
-	airport, err = s.airportRepository.Insert(ctx, tx, airport)
-	util.PanicIfError(err)
+	isExists, err := s.airportRepository.FindExistsByICAOID(ctx, tx, *r.ICAOID)
+	if err != nil {
+		s.logger.Errorf("[Create] Failed to check existing airport: %v", err)
+		return airport_dto.AirportDto{}, util.ErrInternalServer
+	}
 
-	data := dto.ToAirportDto(airport)
-	return data
+	if isExists {
+		s.logger.Warnf("[Create] Airport with ICAO ID %s already exists", *r.ICAOID)
+		return airport_dto.AirportDto{}, util.ErrConflict
+	}
+
+	airport := airport_dto.AirportRequestToAirport(r)
+	airport, err = s.airportRepository.Insert(ctx, tx, airport)
+	if err != nil {
+		s.logger.Errorf("[Create] Failed to insert airport: %v", err)
+		return airport_dto.AirportDto{}, err
+	}
+
+	data := airport_dto.ToAirportDto(airport)
+	return data, nil
 }
 
-func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryParams) pagination_dto.PaginationDto {
+func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryParams) (pagination_dto.PaginationDto, error) {
 	s.logger.Debug("[FindAll] Fetching all airports...")
 
 	tx, err := s.db.Begin()
-	util.PanicIfError(err)
+	if err != nil {
+		s.logger.Errorf("[FindAll] Failed to begin transaction: %v", err)
+		return pagination_dto.PaginationDto{}, util.ErrInternalServer
+	}
 	defer util.CommitOrRollback(tx)
 
 	args := map[string]interface{}{
@@ -70,16 +98,16 @@ func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryPar
 		"offset": query.Offset,
 	}
 	airports, total, err := s.airportRepository.FindAll(ctx, tx, args)
-	util.PanicIfError(err)
-
-	airportRecords := dto.ToAirportRecordDtos(airports)
-	records := make([]interface{}, len(airportRecords))
-	for i, v := range airportRecords {
-		records[i] = v
+	if err != nil {
+		s.logger.Errorf("[FindAll] Failed to fetch airports: %v", err)
+		return pagination_dto.PaginationDto{}, util.ErrInternalServer
 	}
+
+	airportRecords := airport_dto.ToAirportRecordDtos(airports)
+	records := util.ToInterfaces(airportRecords)
 	hasNext := (query.Offset + query.Limit) < total
 
-	return pagination_dto.PaginationDto{
+	response := pagination_dto.PaginationDto{
 		Object:  "pagination",
 		Records: records,
 		Total:   total,
@@ -89,9 +117,11 @@ func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryPar
 			Next:  hasNext,
 		},
 	}
+
+	return response, nil
 }
 
-func (s *AirportService) FindByID(ctx context.Context, id string) (dto.AirportDto, error) {
+func (s *AirportService) FindByID(ctx context.Context, id string) (airport_dto.AirportDto, error) {
 	s.logger.Debug("[FindByID] Fetching airport by ID...")
 
 	tx, err := s.db.Begin()
@@ -101,19 +131,19 @@ func (s *AirportService) FindByID(ctx context.Context, id string) (dto.AirportDt
 	airport, err := s.airportRepository.FindByID(ctx, tx, id)
 
 	if err != nil {
-		return dto.AirportDto{}, util.ErrNotFound
+		return airport_dto.AirportDto{}, util.ErrNotFound
 	}
 
-	return dto.ToAirportDto(airport), nil
+	return airport_dto.ToAirportDto(airport), nil
 }
 
-func (s *AirportService) Update(ctx context.Context, id string, u dto.AirportUpdateDto) (dto.AirportDto, error) {
+func (s *AirportService) Update(ctx context.Context, id string, u airport_dto.AirportUpdateDto) (airport_dto.AirportDto, error) {
 	s.logger.Debug("[Update] Updating airport...")
 
 	err := s.validate.Struct(u)
 	if err != nil {
 		util.LogPanicError(err)
-		return dto.AirportDto{}, util.ErrBadRequest
+		return airport_dto.AirportDto{}, util.ErrBadRequest
 	}
 
 	tx, err := s.db.Begin()
@@ -123,7 +153,7 @@ func (s *AirportService) Update(ctx context.Context, id string, u dto.AirportUpd
 	airport, err := s.airportRepository.FindByID(ctx, tx, id)
 
 	if err == util.ErrNotFound {
-		return dto.AirportDto{}, util.ErrNotFound
+		return airport_dto.AirportDto{}, util.ErrNotFound
 	} else if err != nil {
 		util.PanicIfError(err)
 	}
@@ -133,7 +163,7 @@ func (s *AirportService) Update(ctx context.Context, id string, u dto.AirportUpd
 	util.PanicIfError(err)
 
 	s.logger.Debugf("[Update] Airport updated: %+v", updatedAirport)
-	return dto.ToAirportDto(updatedAirport), nil
+	return airport_dto.ToAirportDto(updatedAirport), nil
 }
 
 func (s *AirportService) Delete(ctx context.Context, id string) error {
@@ -195,11 +225,11 @@ func (s *AirportService) getWeatherConditionByCode(ctx context.Context, code str
 	// Get Airport Weather Condition
 	weather, _ := s.weatherService.GetWeatherCondition(ctx, airport.City)
 
-	data := []dto.AirportWeatherDto{}
-	airportWeather := dto.AirportWeatherDto{
+	data := []airport_dto.AirportWeatherDto{}
+	airportWeather := airport_dto.AirportWeatherDto{
 		Object:  "airport_weather",
 		Code:    airport.ICAOID,
-		Airport: util.Ptr(dto.ToAirportDto(airport)),
+		Airport: util.Ptr(airport_dto.ToAirportDto(airport)),
 		Weather: weather.Current,
 	}
 	data = append(data, airportWeather)
@@ -232,7 +262,7 @@ func (s *AirportService) getWeatherConditionBySearchName(ctx context.Context, na
 		return nil, err
 	}
 
-	records := []dto.AirportWeatherDto{}
+	records := []airport_dto.AirportWeatherDto{}
 	for _, airport := range airports {
 		// Get Airport Weather Condition
 		weather, _ := s.weatherService.GetWeatherCondition(ctx, airport.City)
@@ -244,10 +274,10 @@ func (s *AirportService) getWeatherConditionBySearchName(ctx context.Context, na
 			current = weather.Current
 		}
 
-		res := dto.AirportWeatherDto{
+		res := airport_dto.AirportWeatherDto{
 			Object:  "airport_weather",
 			Code:    airport.ICAOID,
-			Airport: util.Ptr(dto.ToAirportDto(airport)),
+			Airport: util.Ptr(airport_dto.ToAirportDto(airport)),
 			Weather: current,
 		}
 

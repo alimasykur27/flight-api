@@ -54,7 +54,8 @@ CREATE TABLE public.airports (
     unicom                      VARCHAR(64),
     ctaf                        VARCHAR(64),
     effective_date              DATE,
-    sync_status                 BOOLEAN NOT NULL DEFAULT FALSE,
+    sync_status                 INTEGER NOT NULL DEFAULT 1,         --- 1=new, 10=on process, 20=synced, 30=no need, 40=not found 50=error
+    sync_message                TEXT,
     created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

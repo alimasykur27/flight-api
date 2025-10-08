@@ -35,7 +35,7 @@ func (h *AirportHandler) RegisterRouter(r chi.Router) {
 		r.Get("/{id}", h.FindByID)
 		r.Put("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
-		r.Get("/weathers", h.GetWeatherCondition)
+		// r.Get("/weathers", h.GetWeatherCondition)
 	}
 
 	// Airports Endpoints
@@ -47,7 +47,14 @@ func (h *AirportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	airportReq := airport_dto.AirportRequestDto{}
 	util.ReadFromRequestBody(r, &airportReq)
 
-	airportResponse := h.airportService.Create(r.Context(), airportReq)
+	airportResponse, err := h.airportService.Create(r.Context(), airportReq)
+	if err != nil {
+		h.logger.Errorf("[Create] Failed to create airport: %v", err)
+		util.ErrorHandler(w, err)
+		return
+	}
+
+	// Response (201 Created)
 	response := response_dto.ResponseDto{
 		Code:   http.StatusCreated,
 		Status: "Created",
@@ -61,7 +68,14 @@ func (h *AirportHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *AirportHandler) FindAll(w http.ResponseWriter, r *http.Request) {
 	query := queryparams.GetQueryParams(r)
 
-	airportResponses := h.airportService.FindAll(r.Context(), query)
+	airportResponses, err := h.airportService.FindAll(r.Context(), query)
+	if err != nil {
+		h.logger.Errorf("[FindAll] Failed to fetch airports: %v", err)
+		util.ErrorHandler(w, err)
+		return
+	}
+
+	// Response (200 OK)
 	response := response_dto.ResponseDto{
 		Code:   http.StatusOK,
 		Status: "OK",

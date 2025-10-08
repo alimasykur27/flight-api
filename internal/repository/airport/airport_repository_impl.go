@@ -3,6 +3,7 @@ package repository_airport
 import (
 	"context"
 	"database/sql"
+	"flight-api/internal/enum"
 	"flight-api/internal/model"
 	"flight-api/pkg/logger"
 	"flight-api/util"
@@ -24,57 +25,58 @@ func NewAirportRepository(l *logger.Logger) IAirportRepository {
 func (r *AirportRepository) Insert(ctx context.Context, tx *sql.Tx, airport model.Airport) (model.Airport, error) {
 	SQL := `
 		INSERT INTO airports (
-			site_number, icao_id, faa_id, iata_id, name, type, status,
-			country, state, state_full, county, city,
-			ownership, "use", manager, manager_phone,
-			latitude, latitude_sec, longitude, longitude_sec,
-			elevation, control_tower, unicom, ctaf, effective_date
+			site_number, icao_id, faa_id, iata_id, name, 
+			type, status, country, state, state_full, 
+			county, city, ownership, "use", manager, 
+			manager_phone, latitude, latitude_sec, longitude, longitude_sec,
+			elevation, control_tower, unicom, ctaf, effective_date,
+			sync_status, sync_message
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9, $10, $11, $12,
-			$13, $14, $15, $16,
-			$17, $18, $19, $20,
-			$21, $22, $23, $24, $25
-		)
-		RETURNING id`
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, $9, $10, 
+			$11, $12, $13, $14, $15, 
+			$16, $17, $18, $19, $20,
+			$21, $22, $23, $24, $25,
+			$26, $27
+		) 
+		RETURNING 
+			id,
+			site_number, icao_id, faa_id, iata_id, name, 
+			type, status, country, state, state_full, 
+			county, city, ownership, "use", manager, 
+			manager_phone, latitude, latitude_sec, longitude, longitude_sec,
+			elevation, control_tower, unicom, ctaf, effective_date,
+			sync_status, sync_message, created_at, updated_at
+	`
 
+	var result model.Airport
 	row := tx.QueryRowContext(
 		ctx,
-		SQL,
-		airport.SiteNumber,
-		airport.ICAOID,
-		airport.FAAID,
-		airport.IATAID,
-		airport.Name,
-		airport.Type,
-		airport.Status,
-		airport.Country,
-		airport.State,
-		airport.StateFull,
-		airport.County,
-		airport.City,
-		airport.Ownership,
-		airport.Use,
-		airport.Manager,
-		airport.ManagerPhone,
-		airport.Latitude,
-		airport.LatitudeSec,
-		airport.Longitude,
-		airport.LongitudeSec,
-		airport.Elevation,
-		airport.ControlTower,
-		airport.Unicom,
-		airport.CTAF,
-		airport.EffectiveDate,
+		strings.TrimSpace(SQL),
+		airport.SiteNumber, airport.ICAOID, airport.FAAID, airport.IATAID, airport.Name,
+		airport.Type, airport.Status, airport.Country, airport.State, airport.StateFull,
+		airport.County, airport.City, airport.Ownership, airport.Use, airport.Manager,
+		airport.ManagerPhone, airport.Latitude, airport.LatitudeSec, airport.Longitude, airport.LongitudeSec,
+		airport.Elevation, airport.ControlTower, airport.Unicom, airport.CTAF, airport.EffectiveDate,
+		enum.SYNC_SYNCED.Int(), enum.SYNC_SYNCED.String(),
 	)
 
-	var id string
-	row.Scan(&id)
+	err := row.Scan(
+		&result.ID,
+		&result.SiteNumber, &result.ICAOID, &result.FAAID, &result.IATAID, &result.Name,
+		&result.Type, &result.Status, &result.Country, &result.State, &result.StateFull,
+		&result.County, &result.City, &result.Ownership, &result.Use, &result.Manager,
+		&result.ManagerPhone, &result.Latitude, &result.LatitudeSec, &result.Longitude, &result.LongitudeSec,
+		&result.Elevation, &result.ControlTower, &result.Unicom, &result.CTAF, &result.EffectiveDate,
+		&result.SyncStatus, &result.SyncMessage, &result.CreatedAt, &result.UpdatedAt,
+	)
 
-	result, err := r.FindByID(ctx, tx, id)
-	util.PanicIfError(err)
+	if err != nil {
+		r.logger.Errorf("Failed to insert airport: %v", err)
+		return model.Airport{}, err
+	}
 
-	r.logger.Debug("Inserted airport with ID:", id)
+	r.logger.Debugf("Inserted airport with ID: %s", result.ID.String())
 	return result, nil
 }
 

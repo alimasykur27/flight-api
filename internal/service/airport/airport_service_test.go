@@ -283,7 +283,7 @@ func TestAirportService_Create_Success(t *testing.T) {
 
 	// Act
 	ctx := context.Background()
-	out := svc.Create(ctx, req)
+	out, _ := svc.Create(ctx, req)
 
 	assert.NotNil(t, out)
 	assert.NotNil(t, out.ID)
@@ -344,7 +344,7 @@ func TestAirportService_FindAll_Success_WithNextTrue(t *testing.T) {
 		Once()
 
 	// Act
-	out := svc.FindAll(context.Background(), q)
+	out, _ := svc.FindAll(context.Background(), q)
 
 	// Assert pagination dto
 	require.Equal(t, "pagination", out.Object)
@@ -413,7 +413,7 @@ func TestAirportService_FindAll_Success_NoNext(t *testing.T) {
 		Return(list, total, nil).
 		Once()
 
-	out := svc.FindAll(context.Background(), q)
+	out, _ := svc.FindAll(context.Background(), q)
 
 	require.Equal(t, "pagination", out.Object)
 	require.Equal(t, total, out.Total)
@@ -467,7 +467,7 @@ func TestAirportService_FindAll_RepoError_Rollback(t *testing.T) {
 		Once()
 
 	require.Panics(t, func() {
-		_ = svc.FindAll(context.Background(), q)
+		_, err = svc.FindAll(context.Background(), q)
 	})
 
 	require.NoError(t, dbmock.ExpectationsWereMet())

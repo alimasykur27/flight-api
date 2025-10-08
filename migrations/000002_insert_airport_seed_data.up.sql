@@ -1,0 +1,23 @@
+INSERT INTO airports (icao_id, sync_status, sync_message) 
+VALUES
+('KDKK', 1, 'new'),
+('KDSV', 1, 'new'),
+('KELM', 1, 'new'),
+('KELZ', 1, 'new'),
+('KFOK', 1, 'new'),
+('KFRG', 1, 'new'),
+('KGFL', 1, 'new'),
+('KHPN', 1, 'new'),
+('KHTO', 1, 'new'),
+('KIAG', 1, 'new'),
+('KISP', 1, 'new'),
+('KITH', 1, 'new'),
+('KJFK', 1, 'new'),
+('KJHW', 1, 'new'),
+('KLGA', 1, 'new'),
+('KLKP', 1, 'new'),
+('KMGJ', 1, 'new'),
+('KMSS', 1, 'new'),
+('KMSV', 1, 'new'),
+('KMTP', 1, 'new'),
+('KOGS', 1, 'new');
