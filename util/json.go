@@ -10,6 +10,11 @@ func ParseJSON(data []byte, source interface{}) error {
 	return err
 }
 
+func ToJSON(data interface{}) ([]byte, error) {
+	bytes, err := json.Marshal(data)
+	return bytes, err
+}
+
 func ReadFromRequestBody(request *http.Request, result interface{}) {
 	decoder := json.NewDecoder(request.Body)
 	err := decoder.Decode(result)

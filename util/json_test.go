@@ -203,7 +203,7 @@ func TestReadFromRequestBody(t *testing.T) {
 		}()
 
 		var got payload
-		util.ReadFromRequestBody(req, &got) // should panic via PanicIfError
+		util.ReadFromRequestBody(req, &got)
 	})
 }
 
