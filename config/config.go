@@ -17,6 +17,8 @@ type Config struct {
 	LogLevel        string        `mapstructure:"LOG_LEVEL"`
 	AppEnv          string        `mapstructure:"APP_ENV"`
 	DatabaseURL     string        `mapstructure:"DATABASE_URL"`
+	RedisURL        string        `mapstructure:"REDIS_URL"`
+	RedisEnable     bool          `mapstructure:"REDIS_ENABLE"`
 	AviationURL     string        `mapstructure:"AVIATION_API_URL"`
 	WeatherURL      string        `mapstructure:"WEATHER_API_URL"`
 	WeatherAPIKey   string        `mapstructure:"WEATHER_API_KEY"`
@@ -63,6 +65,8 @@ func Load() (config Config, err error) {
 	viper.SetDefault("LOG_LEVEL", "info")
 	viper.SetDefault("APP_ENV", "development")
 	viper.SetDefault("DATABASE_URL", "")
+	viper.SetDefault("REDIS_URL", "")
+	viper.SetDefault("REDIS_ENABLE", false)
 	viper.SetDefault("AVIATION_API_URL", "")
 	viper.SetDefault("WEATHER_API_URL", "")
 	viper.SetDefault("WEATHER_API_KEY", "")
