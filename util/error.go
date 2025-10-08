@@ -7,11 +7,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var ErrUnauthorized = errors.New("unauthorized")
-var ErrNotFound = errors.New("record not found")
-var ErrBadRequest = errors.New("bad request")
-var ErrGatewayTimeout = errors.New("gateway timeout")
-var ErrInternalServer = errors.New("internal server error")
+var ErrBadRequest = errors.New("bad request")                 // 400
+var ErrUnauthorized = errors.New("unauthorized")              // 401
+var ErrPaymentRequired = errors.New("payment required")       // 402
+var ErrForbidden = errors.New("forbidden")                    // 403
+var ErrNotFound = errors.New("record not found")              // 404
+var ErrConflict = errors.New("data conflict")                 // 409
+var ErrInternalServer = errors.New("internal server error")   // 500
+var ErrNotImplemented = errors.New("not implemented")         // 501
+var ErrBadGateway = errors.New("bad gateway")                 // 502
+var ErrServiceUnavailable = errors.New("service unavailable") // 503
+var ErrGatewayTimeout = errors.New("gateway timeout")         // 504
 
 // LogPanicError will log the error and panic if the error is not nil
 func LogPanicError(err error) {
