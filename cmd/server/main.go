@@ -43,10 +43,17 @@ func main() {
 		logger.Fatalw(logrus.Fields{
 			"error": err,
 		}, "Failed to connect to database")
-	} else {
-		logger.Info("Succesfully connected to database!")
 	}
 	defer db.Close()
+
+	// Test the database connection
+	err = db.Ping()
+	if err != nil {
+		logger.Fatalw(logrus.Fields{
+			"error": err,
+		}, "Failed to ping database")
+	}
+	logger.Info("Successfully connected to the database")
 
 	// Initialize validator
 	validate := util.NewValidator()

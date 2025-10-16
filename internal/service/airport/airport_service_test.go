@@ -152,7 +152,7 @@ var dataDummy = []struct {
 
 var Object = "weather"
 var dataDummyWeather = map[string]weather_dto.WeatherDto{
-	"new_york": weather_dto.WeatherDto{
+	"new_york": {
 		Location: &location_dto.LocationDto{
 			Name:           util.Ptr("New York"),
 			Region:         util.Ptr("New York"),
@@ -210,17 +210,7 @@ func TestAirportService_New(t *testing.T) {
 }
 
 func TestAirportService_Create_Success(t *testing.T) {
-	log := logger.NewLogger(logger.INFO_DEBUG_LEVEL)
-	val := util.NewValidator()
-
-	db, dbmock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	repoMock := &repository_airport.AirportRepositoryMock{Mock: mock.Mock{}}
-	weatherMock := &service_weather.WeatherServiceMock{Mock: mock.Mock{}}
-
-	svc := NewAirportService(log, val, db, repoMock, weatherMock)
+	_, _, _, dbmock, repoMock, _, svc := newDeps(t)
 
 	// Expect tx dari service
 	dbmock.ExpectBegin()
@@ -270,7 +260,16 @@ func TestAirportService_Create_Success(t *testing.T) {
 		UpdatedAt:     &timeNow,
 	}
 
-	// Expect: repo.Insert dipanggil dengan ctx apapun, tx valid, dan airport model yang terbentuk dari request
+	// Setup repo mock
+	repoMock.Mock.
+		On(
+			"FindExistsByICAOID",
+			mock.Anything, // ctx
+			mock.MatchedBy(func(db *sql.DB) bool { return db != nil }),
+			*req.ICAOID,
+		).Return(false, nil).
+		Once()
+
 	repoMock.Mock.
 		On(
 			"Insert",
@@ -300,17 +299,7 @@ func TestAirportService_Create_Success(t *testing.T) {
 }
 
 func TestAirportService_FindAll_Success_WithNextTrue(t *testing.T) {
-	log := logger.NewLogger(logger.INFO_DEBUG_LEVEL)
-	val := util.NewValidator()
-
-	db, dbmock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	repoMock := &repository_airport.AirportRepositoryMock{Mock: mock.Mock{}}
-	weatherMock := &service_weather.WeatherServiceMock{Mock: mock.Mock{}}
-
-	svc := NewAirportService(log, val, db, repoMock, weatherMock)
+	_, _, _, dbmock, repoMock, _, svc := newDeps(t)
 
 	// Query params: Limit kecil, total besar → Next = true
 	q := queryparams.QueryParams{
@@ -319,11 +308,7 @@ func TestAirportService_FindAll_Success_WithNextTrue(t *testing.T) {
 		Page:   1,
 	}
 
-	// Expect transaksi
-	dbmock.ExpectBegin()
-	dbmock.ExpectCommit()
-
-	// Data dari repo
+	// Dummy Data
 	a1 := dataDummy[0].row
 	a2 := dataDummy[1].row
 	list := []model.Airport{a1, a2}
@@ -333,7 +318,7 @@ func TestAirportService_FindAll_Success_WithNextTrue(t *testing.T) {
 	repoMock.Mock.
 		On("FindAll",
 			mock.Anything, // ctx
-			mock.MatchedBy(func(tx *sql.Tx) bool { return tx != nil }),
+			mock.MatchedBy(func(db *sql.DB) bool { return db != nil }),
 			mock.MatchedBy(func(m map[string]interface{}) bool {
 				lim, lok := m["limit"].(int)
 				off, ook := m["offset"].(int)
@@ -375,17 +360,7 @@ func TestAirportService_FindAll_Success_WithNextTrue(t *testing.T) {
 }
 
 func TestAirportService_FindAll_Success_NoNext(t *testing.T) {
-	log := logger.NewLogger(logger.INFO_DEBUG_LEVEL)
-	val := util.NewValidator()
-
-	db, dbmock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	repoMock := &repository_airport.AirportRepositoryMock{Mock: mock.Mock{}}
-	weatherMock := &service_weather.WeatherServiceMock{Mock: mock.Mock{}}
-
-	svc := NewAirportService(log, val, db, repoMock, weatherMock)
+	_, _, _, dbmock, repoMock, _, svc := newDeps(t)
 
 	// (offset + limit) == total ⇒ Next: false
 	q := queryparams.QueryParams{
@@ -393,9 +368,6 @@ func TestAirportService_FindAll_Success_NoNext(t *testing.T) {
 		Offset: 4,
 		Page:   3,
 	}
-
-	dbmock.ExpectBegin()
-	dbmock.ExpectCommit()
 
 	a1 := dataDummy[0].row
 	a2 := dataDummy[1].row
@@ -405,7 +377,7 @@ func TestAirportService_FindAll_Success_NoNext(t *testing.T) {
 	repoMock.Mock.
 		On("FindAll",
 			mock.Anything,
-			mock.MatchedBy(func(tx *sql.Tx) bool { return tx != nil }),
+			mock.MatchedBy(func(db *sql.DB) bool { return db != nil }),
 			mock.MatchedBy(func(m map[string]interface{}) bool {
 				return m["limit"] == q.Limit && m["offset"] == q.Offset
 			}),
@@ -439,66 +411,43 @@ func TestAirportService_FindAll_Success_NoNext(t *testing.T) {
 	repoMock.Mock.AssertExpectations(t)
 }
 
-func TestAirportService_FindAll_RepoError_Rollback(t *testing.T) {
-	log := logger.NewLogger(logger.INFO_DEBUG_LEVEL)
-	val := util.NewValidator()
-
-	db, dbmock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	repoMock := &repository_airport.AirportRepositoryMock{Mock: mock.Mock{}}
-	weatherMock := &service_weather.WeatherServiceMock{Mock: mock.Mock{}}
-
-	svc := NewAirportService(log, val, db, repoMock, weatherMock)
+func TestAirportService_FindAll_RepoError(t *testing.T) {
+	_, _, _, dbmock, repoMock, _, svc := newDeps(t)
 
 	q := queryparams.QueryParams{Limit: 10, Offset: 0, Page: 1}
-
-	dbmock.ExpectBegin()
-	dbmock.ExpectRollback() // karena error
 
 	repoMock.Mock.
 		On("FindAll",
 			mock.Anything,
-			mock.MatchedBy(func(tx *sql.Tx) bool { return tx != nil }),
+			mock.MatchedBy(func(db *sql.DB) bool { return db != nil }),
 			mock.AnythingOfType("map[string]interface {}"),
 		).
-		Return(nil, 0, assertErr("db failure")).
+		Return(nil, 0, util.ErrInternalServer).
 		Once()
 
-	require.Panics(t, func() {
-		_, err = svc.FindAll(context.Background(), q)
-	})
+	out, err := svc.FindAll(context.Background(), q)
 
+	require.Nil(t, out)
+	require.Error(t, err)
+	require.Equal(t, "Failed to fetch airports", err.Error())
+	require.Contains(t, err.Error(), "Failed to fetch airports")
 	require.NoError(t, dbmock.ExpectationsWereMet())
 	repoMock.Mock.AssertExpectations(t)
 }
 
 func TestAirportService_FindByID_Success(t *testing.T) {
-	log := logger.NewLogger(logger.INFO_DEBUG_LEVEL)
-	val := util.NewValidator()
+	_, _, _, dbmock, repoMock, _, svc := newDeps(t)
 
-	db, dbmock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	repoMock := &repository_airport.AirportRepositoryMock{Mock: mock.Mock{}}
-	weatherMock := &service_weather.WeatherServiceMock{Mock: mock.Mock{}}
-	svc := NewAirportService(log, val, db, repoMock, weatherMock)
-
+	// target: KJFK
 	targetID := sliceId["KJFK"]
 	expectedModel := dataDummy[0].row
 	expectedDto := dto.ToAirportDto(expectedModel)
-
-	// transaksi: begin + commit (tidak panic)
-	dbmock.ExpectBegin()
-	dbmock.ExpectCommit()
 
 	// expect repo: tx valid & id sesuai
 	repoMock.Mock.
 		On("FindByID",
 			mock.Anything, // ctx
-			mock.MatchedBy(func(tx *sql.Tx) bool { return tx != nil }),
+			mock.MatchedBy(func(db *sql.DB) bool { return db != nil }),
 			targetID.String(),
 		).
 		Return(expectedModel, nil).
@@ -508,8 +457,8 @@ func TestAirportService_FindByID_Success(t *testing.T) {
 	got, err := svc.FindByID(context.Background(), targetID.String())
 
 	// assert
-	require.NoError(t, err)
-	require.Equal(t, expectedDto, got)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedDto, *got)
 
 	assert.NotNil(t, got.ID)
 	assert.Equal(t, *expectedModel.ICAOID, *got.ICAOID)
@@ -519,32 +468,20 @@ func TestAirportService_FindByID_Success(t *testing.T) {
 	assert.Equal(t, *expectedModel.Latitude, *got.Latitude)
 	assert.Equal(t, *expectedModel.Longitude, *got.Longitude)
 
-	require.NoError(t, dbmock.ExpectationsWereMet())
+	assert.NoError(t, dbmock.ExpectationsWereMet())
 	repoMock.Mock.AssertExpectations(t)
 }
 
 func TestAirportService_FindByID_NotFound(t *testing.T) {
-	log := logger.NewLogger(logger.INFO_DEBUG_LEVEL)
-	val := util.NewValidator()
+	_, _, _, dbmock, repoMock, _, svc := newDeps(t)
 
-	db, dbmock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	repoMock := &repository_airport.AirportRepositoryMock{Mock: mock.Mock{}}
-	weatherMock := &service_weather.WeatherServiceMock{Mock: mock.Mock{}}
-	svc := NewAirportService(log, val, db, repoMock, weatherMock)
-
+	// target: Unknown ID
 	unknownID := uuid.New().String()
-
-	// transaksi tetap commit karena tidak ada panic
-	dbmock.ExpectBegin()
-	dbmock.ExpectCommit()
 
 	repoMock.Mock.
 		On("FindByID",
 			mock.Anything,
-			mock.MatchedBy(func(tx *sql.Tx) bool { return tx != nil }),
+			mock.MatchedBy(func(db *sql.DB) bool { return db != nil }),
 			unknownID,
 		).
 		Return(model.Airport{}, util.ErrNotFound).
@@ -554,32 +491,23 @@ func TestAirportService_FindByID_NotFound(t *testing.T) {
 	got, err := svc.FindByID(context.Background(), unknownID)
 
 	// assert
-	require.Error(t, err)
-	require.Equal(t, util.ErrNotFound, err)
-	require.Equal(t, dto.AirportDto{}, got) // kosong sesuai code
+	assert.Error(t, err)
+	assert.Equal(t, util.ErrNotFound, err)
+	assert.Equal(t, (*dto.AirportDto)(nil), got)
 
-	require.NoError(t, dbmock.ExpectationsWereMet())
+	assert.NoError(t, dbmock.ExpectationsWereMet())
 	repoMock.Mock.AssertExpectations(t)
 }
 
 // -------- UPDATE --------
 func TestAirportService_Update_Success(t *testing.T) {
-	log := logger.NewLogger(logger.INFO_DEBUG_LEVEL)
-	val := util.NewValidator()
-
-	db, dbmock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	repoMock := &repository_airport.AirportRepositoryMock{Mock: mock.Mock{}}
-	weatherMock := &service_weather.WeatherServiceMock{Mock: mock.Mock{}}
-	svc := NewAirportService(log, val, db, repoMock, weatherMock)
+	_, _, _, dbmock, repoMock, _, svc := newDeps(t)
 
 	// Arrange
 	id := sliceId["KJFK"]
 	existing := dataDummy[0].row // KJFK
 
-	// update fields
+	// Update field: Name, City
 	newName := "JFK Intl (Renamed)"
 	newCity := "NYC"
 	updatedTime := time.Now().Add(1 * time.Hour) // pastikan UpdatedAt berubah
@@ -588,27 +516,27 @@ func TestAirportService_Update_Success(t *testing.T) {
 		City: util.Ptr(newCity),
 	}
 
-	// transaksi: begin + commit
+	// Setup transaction expectation
 	dbmock.ExpectBegin()
 	dbmock.ExpectCommit()
 
-	// repo.FindByID -> return existing
+	// Setup repo mock
 	repoMock.Mock.
 		On("FindByID",
 			mock.Anything,
-			mock.MatchedBy(func(tx *sql.Tx) bool { return tx != nil }),
+			mock.MatchedBy(func(db *sql.DB) bool { return db != nil }),
 			id.String(),
 		).
 		Return(existing, nil).
 		Once()
 
-	// expect Update menerima airport yg sudah terisi perubahan
+	// Setup updated airport
 	updatedAirport := existing
 	*updatedAirport.Name = newName
 	*updatedAirport.City = newCity
 	updatedAirport.UpdatedAt = &updatedTime
 
-	// repo.Update -> return updatedAirport
+	// Expect repo.Update call with updated fields
 	repoMock.Mock.
 		On("Update",
 			mock.Anything,
@@ -693,7 +621,7 @@ func TestAirportService_Update_UpdateRepoError(t *testing.T) {
 	}
 
 	dbmock.ExpectBegin()
-	dbmock.ExpectRollback() // karena PanicIfError pada Update
+	dbmock.ExpectRollback()
 
 	// FindByID OK
 	repoMock.Mock.

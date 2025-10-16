@@ -35,6 +35,6 @@ type Airport struct {
 	EffectiveDate *time.Time `db:"effective_date"`
 	SyncStatus    *int64     `db:"sync_status"`
 	SyncMessage   *string    `db:"sync_message"`
-	CreatedAt     *time.Time `db:"created_at"`
 	UpdatedAt     *time.Time `db:"updated_at"`
+	CreatedAt     *time.Time `db:"created_at"`
 }

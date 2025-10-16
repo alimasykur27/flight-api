@@ -40,67 +40,49 @@ func NewAirportService(
 	}
 }
 
-func (s *AirportService) Seeding(ctx context.Context, reqs []string) ([]airport_dto.AirportDto, error) {
-	s.logger.Debug("[Seeding] Seeding airport data...")
-
-	return nil, nil
-}
-
-func (s *AirportService) Create(ctx context.Context, r airport_dto.AirportRequestDto) (airport_dto.AirportDto, error) {
+func (s *AirportService) Create(ctx context.Context, r airport_dto.AirportRequestDto) (*airport_dto.AirportDto, error) {
 	s.logger.Debug("[Create] Creating new airport...")
 
-	err := s.validate.Struct(r)
-	if err != nil {
-		return airport_dto.AirportDto{}, nil
-	}
-
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		s.logger.Errorf("[Create] Failed to begin transaction: %v", err)
-		return airport_dto.AirportDto{}, util.ErrInternalServer
+		return nil, util.NewErrorException(util.ErrDatabase, "failed to begin database transaction")
 	}
-	defer util.CommitOrRollback(tx)
+	defer util.FinishTx(tx, &err)
 
-	isExists, err := s.airportRepository.FindExistsByICAOID(ctx, tx, *r.ICAOID)
+	isExists, err := s.airportRepository.FindExistsByICAOID(ctx, s.db, *r.ICAOID)
 	if err != nil {
 		s.logger.Errorf("[Create] Failed to check existing airport: %v", err)
-		return airport_dto.AirportDto{}, util.ErrInternalServer
+		return nil, util.NewErrorException(util.ErrDatabase, "failed to check existing airport: "+err.Error())
 	}
 
-	if isExists {
+	if *isExists {
 		s.logger.Warnf("[Create] Airport with ICAO ID %s already exists", *r.ICAOID)
-		return airport_dto.AirportDto{}, util.ErrConflict
+		return nil, util.NewErrorException(util.ErrConflict, "airport already exists")
 	}
 
-	airport := airport_dto.AirportRequestToAirport(r)
-	airport, err = s.airportRepository.Insert(ctx, tx, airport)
+	airportReq := airport_dto.AirportRequestToAirport(r)
+	airport, err := s.airportRepository.Insert(ctx, tx, airportReq)
 	if err != nil {
 		s.logger.Errorf("[Create] Failed to insert airport: %v", err)
-		return airport_dto.AirportDto{}, err
+		return nil, util.NewErrorException(util.ErrDatabase, "failed to insert airport: "+err.Error())
 	}
 
-	data := airport_dto.ToAirportDto(airport)
-	return data, nil
+	data := airport_dto.ToAirportDto(*airport)
+	return &data, nil
 }
 
-func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryParams) (pagination_dto.PaginationDto, error) {
+func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryParams) (*pagination_dto.PaginationDto, error) {
 	s.logger.Debug("[FindAll] Fetching all airports...")
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		s.logger.Errorf("[FindAll] Failed to begin transaction: %v", err)
-		return pagination_dto.PaginationDto{}, util.ErrInternalServer
-	}
-	defer util.CommitOrRollback(tx)
 
 	args := map[string]interface{}{
 		"limit":  query.Limit,
 		"offset": query.Offset,
 	}
-	airports, total, err := s.airportRepository.FindAll(ctx, tx, args)
+	airports, total, err := s.airportRepository.FindAll(ctx, s.db, args)
 	if err != nil {
 		s.logger.Errorf("[FindAll] Failed to fetch airports: %v", err)
-		return pagination_dto.PaginationDto{}, util.ErrInternalServer
+		return nil, util.NewErrorException(util.ErrDatabase, "failed to fetch airports: "+err.Error())
 	}
 
 	airportRecords := airport_dto.ToAirportRecordDtos(airports)
@@ -118,23 +100,24 @@ func (s *AirportService) FindAll(ctx context.Context, query queryparams.QueryPar
 		},
 	}
 
-	return response, nil
+	return &response, nil
 }
 
-func (s *AirportService) FindByID(ctx context.Context, id string) (airport_dto.AirportDto, error) {
+func (s *AirportService) FindByID(ctx context.Context, id string) (*airport_dto.AirportDto, error) {
 	s.logger.Debug("[FindByID] Fetching airport by ID...")
 
-	tx, err := s.db.Begin()
-	util.PanicIfError(err)
-	defer util.CommitOrRollback(tx)
+	airport, err := s.airportRepository.FindByID(ctx, s.db, id)
 
-	airport, err := s.airportRepository.FindByID(ctx, tx, id)
-
-	if err != nil {
-		return airport_dto.AirportDto{}, util.ErrNotFound
+	if err == util.ErrNotFound {
+		s.logger.Warnf("[FindByID] Airport not found: %v", err)
+		return nil, util.NewErrorException(util.ErrNotFound, "Airport not found: "+err.Error())
+	} else if err != nil {
+		s.logger.Errorf("[FindByID] Failed to fetch airport by ID: %v", err)
+		return nil, util.NewErrorException(util.ErrDatabase, "failed to fetch airport by ID: "+err.Error())
 	}
+	res := airport_dto.ToAirportDto(airport)
 
-	return airport_dto.ToAirportDto(airport), nil
+	return &res, nil
 }
 
 func (s *AirportService) Update(ctx context.Context, id string, u airport_dto.AirportUpdateDto) (airport_dto.AirportDto, error) {
@@ -142,25 +125,31 @@ func (s *AirportService) Update(ctx context.Context, id string, u airport_dto.Ai
 
 	err := s.validate.Struct(u)
 	if err != nil {
-		util.LogPanicError(err)
 		return airport_dto.AirportDto{}, util.ErrBadRequest
 	}
 
 	tx, err := s.db.Begin()
-	util.PanicIfError(err)
-	defer util.CommitOrRollback(tx)
+	if err != nil {
+		s.logger.Errorf("[Create] Failed to begin transaction: %v", err)
+		return airport_dto.AirportDto{}, util.NewErrorException(util.ErrDatabase, "failed to begin database transaction: "+err.Error())
+	}
+	defer util.FinishTx(tx, &err)
 
-	airport, err := s.airportRepository.FindByID(ctx, tx, id)
+	airport, err := s.airportRepository.FindByID(ctx, s.db, id)
 
 	if err == util.ErrNotFound {
-		return airport_dto.AirportDto{}, util.ErrNotFound
+		return airport_dto.AirportDto{}, util.NewErrorException(util.ErrNotFound, "airport not found: "+err.Error())
 	} else if err != nil {
-		util.PanicIfError(err)
+		s.logger.Errorf("[Update] Failed to find airport: %v", err)
+		return airport_dto.AirportDto{}, util.NewErrorException(util.ErrDatabase, "failed to find airport: "+err.Error())
 	}
 
 	util.FillUpdatableFields(&airport, u)
 	updatedAirport, err := s.airportRepository.Update(ctx, tx, id, airport)
-	util.PanicIfError(err)
+	if err != nil {
+		s.logger.Errorf("[Update] Failed to update airport: %v", err)
+		return airport_dto.AirportDto{}, util.NewErrorException(util.ErrDatabase, "failed to update airport: "+err.Error())
+	}
 
 	s.logger.Debugf("[Update] Airport updated: %+v", updatedAirport)
 	return airport_dto.ToAirportDto(updatedAirport), nil
@@ -170,17 +159,25 @@ func (s *AirportService) Delete(ctx context.Context, id string) error {
 	s.logger.Debug("[Delete] Deleting airport...")
 
 	tx, err := s.db.Begin()
-	util.PanicIfError(err)
-	defer util.CommitOrRollback(tx)
+	if err != nil {
+		s.logger.Errorf("[Delete] Failed to begin transaction: %v", err)
+		return util.NewErrorException(util.ErrDatabase, "failed to begin database transaction: "+err.Error())
+	}
+	defer util.FinishTx(tx, &err)
 
-	_, err = s.airportRepository.FindByID(ctx, tx, id)
+	_, err = s.airportRepository.FindByID(ctx, s.db, id)
 
 	if err == util.ErrNotFound {
-		return util.ErrNotFound
+		return util.NewErrorException(util.ErrNotFound, "airport not found: "+err.Error())
+	} else if err != nil {
+		s.logger.Errorf("[Delete] Failed to find airport: %v", err)
+		return util.NewErrorException(util.ErrDatabase, "failed to find airport: "+err.Error())
 	}
 
 	err = s.airportRepository.Delete(ctx, tx, id)
-	util.PanicIfError(err)
+	if err != nil {
+		return util.NewErrorException(err, "failed to delete airport: "+err.Error())
+	}
 
 	return nil
 }
@@ -196,11 +193,11 @@ func (s *AirportService) GetWeatherCondition(ctx context.Context, code string, n
 	} else if name != "" {
 		response, err = s.getWeatherConditionBySearchName(ctx, name, query)
 	} else {
-		return nil, util.ErrBadRequest
+		return nil, util.NewErrorException(util.ErrBadRequest, "either 'code' or 'name' parameter must be provided")
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, util.NewErrorException(err, "failed to get weather condition: "+err.Error())
 	}
 
 	return response, nil
@@ -210,16 +207,19 @@ func (s *AirportService) getWeatherConditionByCode(ctx context.Context, code str
 	s.logger.Debugf("[getWeatherConditionByCode] Fetching weather data from Weather APIs...")
 
 	tx, err := s.db.Begin()
-	util.PanicIfError(err)
-	defer util.CommitOrRollback(tx)
+	if err != nil {
+		s.logger.Errorf("[getWeatherConditionByCode] Failed to begin transaction: %v", err)
+		return nil, util.NewErrorException(util.ErrDatabase, "failed to begin database transaction: "+err.Error())
+	}
+	defer util.FinishTx(tx, &err)
 
 	// Find Airport By ICAO ID
-	airport, err := s.airportRepository.FindByICAOID(ctx, tx, code)
+	airport, err := s.airportRepository.FindByICAOID(ctx, s.db, code)
 
 	if err == util.ErrNotFound {
-		return nil, util.ErrNotFound
+		return nil, util.NewErrorException(util.ErrNotFound, "airport not found: "+err.Error())
 	} else if err != nil {
-		return nil, util.ErrInternalServer
+		return nil, util.NewErrorException(util.ErrDatabase, "failed to find airport by ICAO ID: "+err.Error())
 	}
 
 	// Get Airport Weather Condition
@@ -238,7 +238,6 @@ func (s *AirportService) getWeatherConditionByCode(ctx context.Context, code str
 		Object:  "pagination",
 		Records: util.ToInterfaces(data),
 		Total:   len(data),
-		Meta:    nil,
 	}
 
 	return &response, nil
@@ -248,8 +247,11 @@ func (s *AirportService) getWeatherConditionBySearchName(ctx context.Context, na
 	s.logger.Debugf("[getWeatherConditionBySearchName] Fetching weather data from Weather APIs...")
 
 	tx, err := s.db.Begin()
-	util.PanicIfError(err)
-	defer util.CommitOrRollback(tx)
+	if err != nil {
+		s.logger.Errorf("[getWeatherConditionBySearchName] Failed to begin transaction: %v", err)
+		return nil, util.NewErrorException(util.ErrDatabase, "Failed to begin database transaction")
+	}
+	defer util.FinishTx(tx, &err)
 
 	args := map[string]interface{}{
 		"limit":  query.Limit,
@@ -257,7 +259,7 @@ func (s *AirportService) getWeatherConditionBySearchName(ctx context.Context, na
 	}
 
 	// Get Airport By Search Name
-	airports, total, err := s.airportRepository.FindBySearchName(ctx, tx, name, args)
+	airports, total, err := s.airportRepository.FindBySearchName(ctx, s.db, name, args)
 	if err != nil {
 		return nil, err
 	}

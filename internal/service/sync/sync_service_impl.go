@@ -44,13 +44,16 @@ func (s *SyncService) SyncAirports(
 	err := s.validate.Struct(req)
 	if err != nil {
 		s.logger.Errorf("[SyncAirports] request validation failed %s", err)
-		return nil, err
+		return nil, util.NewErrorException(util.ErrValidation, "request validation failed: "+err.Error())
 	}
 	s.logger.Debug("[SyncAirports] request validated")
 
 	tx, err := s.db.Begin()
-	util.PanicIfError(err)
-	defer util.CommitOrRollback(tx)
+	if err != nil {
+		s.logger.Errorf("[SyncAirports] Failed to begin transaction: %v", err)
+		return nil, util.NewErrorException(util.ErrDatabase, "Failed to begin database transaction")
+	}
+	defer util.FinishTx(tx, &err)
 
 	// Prepare list of ICAO codes to fetch from Aviation API
 	var icaoCodesToFetch []string
@@ -61,7 +64,7 @@ func (s *SyncService) SyncAirports(
 
 	s.logger.Debug("[SyncAirports] Checking existing ICAO codes in the database...")
 	for _, code := range ICAOCodes {
-		exists, err := s.airportRepository.FindExistsByICAOID(ctx, tx, code)
+		exists, err := s.airportRepository.FindExistsByICAOID(ctx, s.db, code)
 		if err != nil {
 			s.logger.Errorf("[SyncAirports] failed to check if ICAO code %s exists: %v", code, err)
 			res := sync_dto.SyncAirportResponse{
@@ -74,7 +77,7 @@ func (s *SyncService) SyncAirports(
 			continue
 		}
 
-		if exists {
+		if exists != nil && *exists {
 			res := sync_dto.SyncAirportResponse{
 				ICAOCode: code,
 				Airport:  nil,
@@ -152,7 +155,7 @@ func (s *SyncService) SyncAirports(
 		}
 
 		s.logger.Debugf("[SyncAirports] Successfully inserted airport data for ICAO code %s", code)
-		airportDto := airport_dto.ToAirportDto(airportModel)
+		airportDto := airport_dto.ToAirportDto(*airportModel)
 		res := sync_dto.SyncAirportResponse{
 			ICAOCode: code,
 			Airport:  &airportDto,

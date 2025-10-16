@@ -51,47 +51,8 @@ func (h *WeatherHandler) GetWeatherCondition(w http.ResponseWriter, r *http.Requ
 	// Call service
 	data, err := h.service.GetWeatherCondition(r.Context(), &loc)
 	if err != nil {
-		h.logger.Errorf("Failed to get weather condition: %v", err)
-
-		switch err {
-		case util.ErrUnauthorized:
-			response = response_dto.ResponseDto{
-				Code:    http.StatusUnauthorized,
-				Status:  "Unauthorized",
-				Data:    nil,
-				Message: "Unauthorized",
-			}
-		case util.ErrNotFound:
-			response = response_dto.ResponseDto{
-				Code:    http.StatusNotFound,
-				Status:  "Not Found",
-				Data:    nil,
-				Message: "No matching location found",
-			}
-		case util.ErrBadRequest:
-			response = response_dto.ResponseDto{
-				Code:    http.StatusBadRequest,
-				Status:  "Bad Request",
-				Data:    nil,
-				Message: "Bad Request",
-			}
-		case util.ErrGatewayTimeout:
-			response = response_dto.ResponseDto{
-				Code:    http.StatusGatewayTimeout,
-				Status:  "Gateway Timeout",
-				Data:    nil,
-				Message: "Gateway Timeout",
-			}
-		default:
-			response = response_dto.ResponseDto{
-				Code:    http.StatusInternalServerError,
-				Status:  "Internal Server Error",
-				Data:    nil,
-				Message: err.Error(),
-			}
-		}
-
-		util.WriteToResponseBody(w, response.Code, response)
+		h.logger.Errorf("[GetWeatherCondition] Failed to get weather condition: %v", err)
+		util.ErrorHandler(w, util.NewErrorException(err, "failed to get weather condition: "+err.Error()))
 		return
 	}
 

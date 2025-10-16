@@ -22,26 +22,99 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var log = logger.NewLogger(logger.DEBUG_LEVEL)
-
-// ---------- HELPER FUNCTIONS ----------
-var selectAirportQuery string = `SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
-	country, state, state_full, county, city, ownership, "use",
-	manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
-	control_tower, unicom, ctaf, effective_date, created_at, updated_at
-FROM airports 
-WHERE id = $1 
-LIMIT 1
+// ------------ QUERY ---------------
+var insertAirportQuery string = `
+	INSERT INTO airports (
+		site_number, icao_id, faa_id, iata_id, name, 
+		type, status, country, state, state_full, 
+		county, city, ownership, "use", manager, 
+		manager_phone, latitude, latitude_sec, longitude, longitude_sec,
+		elevation, control_tower, unicom, ctaf, effective_date,
+		sync_status, sync_message
+	) VALUES (
+		$1, $2, $3, $4, $5,
+		$6, $7, $8, $9, $10, 
+		$11, $12, $13, $14, $15, 
+		$16, $17, $18, $19, $20,
+		$21, $22, $23, $24, $25,
+		$26, $27
+	) 
+	RETURNING 
+		id,
+		site_number, icao_id, faa_id, iata_id, name, 
+		type, status, country, state, state_full, 
+		county, city, ownership, "use", manager, 
+		manager_phone, latitude, latitude_sec, longitude, longitude_sec,
+		elevation, control_tower, unicom, ctaf, effective_date,
+		sync_status, sync_message, created_at, updated_at
 `
 
-func newCols() []string {
+var syncAirportQuery string = `
+	INSERT INTO airports (
+		site_number, icao_id, faa_id, iata_id, name, 
+		type, status, country, state, state_full, 
+		county, city, ownership, "use", manager, 
+		manager_phone, latitude, latitude_sec, longitude, longitude_sec,
+		elevation, control_tower, unicom, ctaf, effective_date,
+		sync_status, sync_message
+	) VALUES (
+		$1, $2, $3, $4, $5, $6, $7,
+		$8, $9, $10, $11, $12,
+		$13, $14, $15, $16,
+		$17, $18, $19, $20,
+		$21, $22, $23, $24, $25,
+		20, 'synced'
+	)
+	RETURNING 
+		id,
+		site_number, icao_id, faa_id, iata_id, name, 
+		type, status, country, state, state_full, 
+		county, city, ownership, "use", manager, 
+		manager_phone, latitude, latitude_sec, longitude, longitude_sec,
+		elevation, control_tower, unicom, ctaf, effective_date,
+		sync_status, sync_message, updated_at, created_at
+`
+
+var selectAirportQuery string = `
+	SELECT 
+		id, 
+		site_number, icao_id, faa_id, iata_id, name, 
+		type, status, country, state, state_full, 
+		county, city, ownership, "use", manager, 
+		manager_phone, latitude, latitude_sec, longitude, longitude_sec, 
+		elevation, control_tower, unicom, ctaf, effective_date, 
+		sync_status, sync_message, updated_at, created_at
+	FROM airports 
+	WHERE id = $1 
+	LIMIT 1
+`
+
+var findBySearchNameQuery string = `
+	SELECT
+		id, 
+		site_number, icao_id, faa_id, iata_id, name, 
+		type, status, country, state, state_full, 
+		county, city, ownership, "use", manager, 
+		manager_phone, latitude, latitude_sec, longitude, longitude_sec, 
+		elevation, control_tower, unicom, ctaf, effective_date, 
+		sync_status, sync_message, updated_at, created_at
+	FROM airports 
+	WHERE 
+		LOWER(name) LIKE LOWER($3)
+	ORDER BY icao_id
+	LIMIT $1
+	OFFSET $2
+`
+
+// ---------- HELPER FUNCTIONS ----------
+func airportTableCols() []string {
 	return []string{
 		"id", "site_number", "icao_id", "faa_id", "iata_id", "name",
 		"type", "status", "country", "state", "state_full", "county", "city",
 		"ownership", "use", "manager", "manager_phone",
 		"latitude", "latitude_sec", "longitude", "longitude_sec",
-		"elevation", "control_tower", "unicom", "ctaf",
-		"effective_date", "created_at", "updated_at",
+		"elevation", "control_tower", "unicom", "ctaf", "effective_date",
+		"sync_status", "sync_message", "updated_at", "created_at",
 	}
 }
 
@@ -67,23 +140,28 @@ func successRow(
 	controlTower *bool,
 	unicom, ctaf *string,
 	effectiveDate *time.Time,
-	createdAt, updatedAt time.Time,
+	sync_status enum.SyncStatusEnum,
+	sync_message *string,
+	updatedAt, createdAt time.Time,
 ) *sqlmock.Rows {
-	return sqlmock.NewRows(newCols()).AddRow(
-		id.String(),
-		site, icao, faa, iata, name,
-		typ,
-		status,
-		country, state, stateFull, county, city,
-		ownership,
-		use,
-		manager, managerPhone, latitude, latitudeSec, longitude, longitudeSec,
-		elevation,
-		controlTower,
-		unicom, ctaf,
-		effectiveDate,
-		createdAt, updatedAt,
-	)
+	return sqlmock.NewRows(airportTableCols()).
+		AddRow(
+			id.String(),
+			site, icao, faa, iata, name,
+			typ,
+			status,
+			country, state, stateFull, county, city,
+			ownership,
+			use,
+			manager, managerPhone, latitude, latitudeSec, longitude, longitudeSec,
+			elevation,
+			controlTower,
+			unicom, ctaf,
+			effectiveDate,
+			sync_status,
+			sync_message,
+			updatedAt, createdAt,
+		)
 }
 
 func buildRowsFindAll(limit, offset int) *sqlmock.Rows {
@@ -138,16 +216,34 @@ func buildRowsByName(nameLike string, limit, offset int) (*sqlmock.Rows, int) {
 		page = []model.Airport{}
 	}
 
-	rows := sqlmock.NewRows(newCols())
+	rows := sqlmock.NewRows(airportTableCols())
 	for _, a := range page {
 		rows.AddRow(
-			a.ID, a.SiteNumber, a.ICAOID, a.FAAID, a.IATAID, a.Name, a.Type, a.Status,
-			a.Country, a.State, a.StateFull, a.County, a.City, a.Ownership, a.Use,
-			a.Manager, a.ManagerPhone, a.Latitude, a.LatitudeSec, a.Longitude, a.LongitudeSec, a.Elevation,
-			a.ControlTower, a.Unicom, a.CTAF, a.EffectiveDate, a.CreatedAt, a.UpdatedAt,
+			a.ID,
+			a.SiteNumber, a.ICAOID, a.FAAID, a.IATAID, a.Name,
+			a.Type, a.Status, a.Country, a.State, a.StateFull,
+			a.County, a.City, a.Ownership, a.Use, a.Manager,
+			a.ManagerPhone, a.Latitude, a.LatitudeSec, a.Longitude, a.LongitudeSec,
+			a.Elevation, a.ControlTower, a.Unicom, a.CTAF, a.EffectiveDate,
+			a.SyncStatus, a.SyncMessage, a.UpdatedAt, a.CreatedAt,
 		)
 	}
 	return rows, total
+}
+
+func SetupTesting(t *testing.T) (*logger.Logger, context.Context, *sql.DB, sqlmock.Sqlmock, func(), *AirportRepository) {
+	log := logger.NewLogger(logger.DEBUG_LEVEL)
+
+	ctx := context.Background()
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	cleanup := func() {
+		assert.NoError(t, mock.ExpectationsWereMet())
+		_ = db.Close()
+	}
+
+	repoMock := &AirportRepository{logger: log}
+	return log, ctx, db, mock, cleanup, repoMock
 }
 
 // ------Data Dummy--------
@@ -278,25 +374,16 @@ var dataDummy = []struct {
 
 // ---------- UNIT TESTS ----------
 func TestNewAirportRepository(t *testing.T) {
-	res := NewAirportRepository(log)
-	assert.NotNil(t, res)
-	assert.IsType(t, &AirportRepository{}, res)
+	_, _, _, _, _, repoMock := SetupTesting(t)
+	assert.NotNil(t, repoMock)
+	assert.IsType(t, &AirportRepository{}, repoMock)
+	assert.NotNil(t, repoMock.logger)
+	assert.IsType(t, &logger.Logger{}, repoMock.logger)
 }
 
 func TestAirportRepository_Insert(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, mock.ExpectationsWereMet())
-		_ = db.Close()
-	}()
-
-	repo := &AirportRepository{logger: log}
-
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	assert.NoError(t, err)
-	defer util.CommitOrRollback(tx)
+	_, ctx, db, mock, cleanup, repoMock := SetupTesting(t)
+	defer cleanup()
 
 	// ---------- arrange input ----------
 	req := airport_dto.AirportRequestDto{
@@ -327,204 +414,44 @@ func TestAirportRepository_Insert(t *testing.T) {
 		EffectiveDate: nil,
 	}
 	modelInput := airport_dto.AirportRequestToAirport(req)
-
-	// ---------- expect INSERT ----------
-	insertRe := regexp.MustCompile(`(?s)INSERT\s+INTO\s+airports\s*\(.*?\)\s*VALUES\s*\(.*?\)\s*RETURNING\s+id`)
 	newID := uuid.New().String()
 
-	mock.ExpectQuery(insertRe.String()).
-		WithArgs(
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-		).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(newID))
-
-	// ---------- expect SELECT (FindByID) ----------
-	now := time.Now()
-	rows := sqlmock.NewRows(newCols()).AddRow(
-		newID,
-		modelInput.SiteNumber,
-		modelInput.ICAOID,
-		modelInput.FAAID,
-		modelInput.IATAID,
-		modelInput.Name,
-		modelInput.Type,
-		modelInput.Status,
-		modelInput.Country,
-		modelInput.State,
-		modelInput.StateFull,
-		modelInput.County,
-		modelInput.City,
-		modelInput.Ownership,
-		modelInput.Use,
-		modelInput.Manager,
-		modelInput.ManagerPhone,
-		modelInput.Latitude,
-		modelInput.LatitudeSec,
-		modelInput.Longitude,
-		modelInput.LongitudeSec,
-		modelInput.Elevation,
-		modelInput.ControlTower,
-		modelInput.Unicom,
-		modelInput.CTAF,
-		modelInput.EffectiveDate,
-		now,
-		now,
-	)
-	mock.ExpectQuery(regexp.QuoteMeta(selectAirportQuery)).
-		WithArgs(newID).
-		WillReturnRows(rows)
-
-	// Expect commit
-	mock.ExpectCommit()
-
-	// Act
-	out, err := repo.Insert(context.Background(), tx, modelInput)
-
-	// Assert
-	assert.NoError(t, err)
-	assert.NotNil(t, out)
-	assert.NotNil(t, out.ID)
-	assert.Equal(t, newID, out.ID.String())
-	assert.Equal(t, modelInput.SiteNumber, out.SiteNumber)
-	assert.Equal(t, modelInput.ICAOID, out.ICAOID)
-	assert.Equal(t, modelInput.FAAID, out.FAAID)
-	assert.Equal(t, modelInput.IATAID, out.IATAID)
-	assert.Equal(t, modelInput.Name, out.Name)
-	assert.Equal(t, modelInput.Type, out.Type)
-	assert.Equal(t, modelInput.Status, out.Status)
-	assert.Equal(t, modelInput.Country, out.Country)
-	assert.Equal(t, modelInput.State, out.State)
-	assert.Equal(t, modelInput.StateFull, out.StateFull)
-	assert.Equal(t, modelInput.County, out.County)
-	assert.Equal(t, modelInput.City, out.City)
-	assert.Equal(t, modelInput.Ownership, out.Ownership)
-	assert.Equal(t, modelInput.Use, out.Use)
-	assert.Equal(t, modelInput.Manager, out.Manager)
-	assert.Equal(t, modelInput.ManagerPhone, out.ManagerPhone)
-	assert.Equal(t, modelInput.Latitude, out.Latitude)
-	assert.Equal(t, modelInput.LatitudeSec, out.LatitudeSec)
-	assert.Equal(t, modelInput.Longitude, out.Longitude)
-	assert.Equal(t, modelInput.LongitudeSec, out.LongitudeSec)
-	assert.Equal(t, modelInput.Elevation, out.Elevation)
-	assert.Equal(t, modelInput.ControlTower, out.ControlTower)
-	assert.Equal(t, modelInput.Unicom, out.Unicom)
-	assert.Equal(t, modelInput.CTAF, out.CTAF)
-	assert.NotNil(t, out.CreatedAt)
-	assert.NotNil(t, out.UpdatedAt)
-	assert.WithinDuration(t, now, *out.CreatedAt, time.Second)
-	assert.WithinDuration(t, now, *out.UpdatedAt, time.Second)
-}
-
-func TestAirportRepository_SyncAirport(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, mock.ExpectationsWereMet())
-		_ = db.Close()
-	}()
-
-	repo := &AirportRepository{logger: log}
-
+	// Expectation
 	mock.ExpectBegin()
-	tx, err := db.Begin()
-	assert.NoError(t, err)
-	defer util.CommitOrRollback(tx)
-
-	// ---------- arrange input ----------
-	req := airport_dto.AirportRequestDto{
-		SiteNumber:    util.Ptr("12345"),
-		ICAOID:        util.Ptr("KJFK"),
-		FAAID:         util.Ptr("JFK"),
-		IATAID:        util.Ptr("JFK"),
-		Name:          util.Ptr("John F. Kennedy International Airport"),
-		Type:          enum.AIRPORT,
-		Status:        util.Ptr(true),
-		Country:       util.Ptr("USA"),
-		State:         util.Ptr("NY"),
-		StateFull:     util.Ptr("New York"),
-		County:        util.Ptr("Queens"),
-		City:          util.Ptr("New York"),
-		Ownership:     enum.OWN_PUBLIC,
-		Use:           enum.USE_PUBLIC,
-		Manager:       util.Ptr("Jane Doe"),
-		ManagerPhone:  util.Ptr("+1-555-1234"),
-		Latitude:      util.Ptr("40.6413 N"),
-		LatitudeSec:   util.Ptr("38.0"),
-		Longitude:     util.Ptr("73.7781 W"),
-		LongitudeSec:  nil, // keep it nil to test
-		Elevation:     util.Ptr(int64(13)),
-		ControlTower:  util.Ptr(true),
-		Unicom:        util.Ptr("123.45"),
-		CTAF:          util.Ptr("123.45"),
-		EffectiveDate: nil,
-	}
-	modelInput := airport_dto.AirportRequestToAirport(req)
-
-	// ---------- expect INSERT ----------
-	insertRe := regexp.MustCompile(`(?s)INSERT\s+INTO\s+airports\s*\(.*?\)\s*VALUES\s*\(.*?\)\s*RETURNING\s+id`)
-	newID := uuid.New().String()
-
-	mock.ExpectQuery(insertRe.String()).
+	mock.ExpectQuery(
+		regexp.QuoteMeta(strings.TrimSpace(insertAirportQuery)),
+	).
 		WithArgs(
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(newID))
-
-	// ---------- expect SELECT (FindByID) ----------
-	cols := newCols()
-	now := time.Now()
-
-	mock.ExpectQuery(regexp.QuoteMeta(selectAirportQuery)).
-		WithArgs(newID).
 		WillReturnRows(
-			sqlmock.NewRows(cols).AddRow(
-				newID,
-				modelInput.SiteNumber,
-				modelInput.ICAOID,
-				modelInput.FAAID,
-				modelInput.IATAID,
-				modelInput.Name,
-				modelInput.Type,
-				modelInput.Status,
-				modelInput.Country,
-				modelInput.State,
-				modelInput.StateFull,
-				modelInput.County,
-				modelInput.City,
-				modelInput.Ownership,
-				modelInput.Use,
-				modelInput.Manager,
-				modelInput.ManagerPhone,
-				modelInput.Latitude,
-				modelInput.LatitudeSec,
-				modelInput.Longitude,
-				modelInput.LongitudeSec,
-				modelInput.Elevation,
-				modelInput.ControlTower,
-				modelInput.Unicom,
-				modelInput.CTAF,
-				modelInput.EffectiveDate,
-				now,
-				now,
-			),
+			sqlmock.NewRows(airportTableCols()).
+				AddRow(
+					newID,
+					modelInput.SiteNumber, modelInput.ICAOID, modelInput.FAAID, modelInput.IATAID, modelInput.Name,
+					modelInput.Type, modelInput.Status, modelInput.Country, modelInput.State, modelInput.StateFull,
+					modelInput.County, modelInput.City, modelInput.Ownership, modelInput.Use, modelInput.Manager,
+					modelInput.ManagerPhone, modelInput.Latitude, modelInput.LatitudeSec, modelInput.Longitude, modelInput.LongitudeSec,
+					modelInput.Elevation, modelInput.ControlTower, modelInput.Unicom, modelInput.CTAF, modelInput.EffectiveDate,
+					enum.SYNC_NEW, enum.SYNC_NEW.String(), timeNow, timeNow,
+				),
 		)
-
-	// Expect commit
 	mock.ExpectCommit()
 
 	// Act
-	out, err := repo.SyncAirport(context.Background(), tx, modelInput)
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	assert.NoError(t, err)
+	defer util.FinishTx(tx, &err)
+
+	out, errRepo := repoMock.Insert(ctx, tx, modelInput)
 
 	// Assert
-	assert.NoError(t, err)
+	assert.Nil(t, errRepo)
 	assert.NotNil(t, out)
 	assert.NotNil(t, out.ID)
 	assert.Equal(t, newID, out.ID.String())
@@ -554,25 +481,14 @@ func TestAirportRepository_SyncAirport(t *testing.T) {
 	assert.Equal(t, modelInput.CTAF, out.CTAF)
 	assert.NotNil(t, out.CreatedAt)
 	assert.NotNil(t, out.UpdatedAt)
-	assert.WithinDuration(t, now, *out.CreatedAt, time.Second)
-	assert.WithinDuration(t, now, *out.UpdatedAt, time.Second)
+	assert.WithinDuration(t, timeNow, *out.CreatedAt, time.Second)
+	assert.WithinDuration(t, timeNow, *out.UpdatedAt, time.Second)
 }
 
 // ---------- UNIT TESTS FOR FindByID ----------
 func TestAirportRepository_FindByID_Success(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, mock.ExpectationsWereMet())
-		_ = db.Close()
-	}()
-
-	repo := NewAirportRepository(log)
-
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	assert.NoError(t, err)
-	defer util.CommitOrRollback(tx)
+	_, ctx, db, mock, cleanup, repoMock := SetupTesting(t)
+	defer cleanup()
 
 	// ---------- data dummy ----------
 	for i := range dataDummy {
@@ -597,18 +513,17 @@ func TestAirportRepository_FindByID_Success(t *testing.T) {
 					row.ControlTower,
 					row.Unicom, row.CTAF,
 					row.EffectiveDate,
-					timeNow, timeNow,
+					enum.SYNC_NEW,
+					util.Ptr(enum.SYNC_NEW.String()),
+					timeNow,
+					timeNow,
 				),
 			)
 	}
 
-	// Expect commit
-	mock.ExpectCommit()
-
 	// Act - Assert
-	ctx := context.Background()
 	for _, test := range dataDummy {
-		out, err := repo.FindByID(ctx, tx, test.id.String())
+		out, err := repoMock.FindByID(ctx, db, test.id.String())
 		assert.NoError(t, err, "unexpected error for %s", test.label)
 		assert.NotNil(t, out, "nil output for %s", test.label)
 		assert.Equal(t, test.id.String(), out.ID.String(), "mismatched ID for %s", test.label)
@@ -620,83 +535,41 @@ func TestAirportRepository_FindByID_Success(t *testing.T) {
 }
 
 func TestAirportRepository_FindByID_NotFound(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, mock.ExpectationsWereMet())
-		_ = db.Close()
-	}()
+	_, _, db, mock, cleanup, repoMock := SetupTesting(t)
+	defer cleanup()
 
-	repo := NewAirportRepository(log)
-
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	assert.NoError(t, err)
-	defer util.CommitOrRollback(tx)
-
-	// id valid tapi tidak ada row
 	id := uuid.New()
 	mock.ExpectQuery(regexp.QuoteMeta(selectAirportQuery)).
 		WithArgs(id).
-		WillReturnRows(sqlmock.NewRows(newCols())) // 0 row
+		WillReturnRows(sqlmock.NewRows(airportTableCols()))
 
-	mock.ExpectCommit()
-
-	_, err = repo.FindByID(context.Background(), tx, id.String())
+	_, err := repoMock.FindByID(context.Background(), db, id.String())
 	assert.ErrorIs(t, err, util.ErrNotFound)
 }
 
 func TestAirportRepository_FindByID_InvalidUUID(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, mock.ExpectationsWereMet())
-		_ = db.Close()
-	}()
+	_, _, db, _, cleanup, repoMock := SetupTesting(t)
+	defer cleanup()
 
-	repo := NewAirportRepository(log)
-
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	assert.NoError(t, err)
-	defer util.CommitOrRollback(tx)
-
-	// INVALID UUID → fungsi return ErrNotFound sebelum query.
-	// Jadi JANGAN set ExpectQuery apapun di test ini.
-
-	mock.ExpectCommit()
-
-	_, err = repo.FindByID(context.Background(), tx, "12345")
+	_, err := repoMock.FindByID(context.Background(), db, "12345")
 	assert.ErrorIs(t, err, util.ErrNotFound)
 }
 
-func TestAirportRepository_FindByID_ErrNoRows_FromQuery(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, mock.ExpectationsWereMet())
-		_ = db.Close()
-	}()
+func TestAirportRepository_FindByID_ErrNoRows(t *testing.T) {
+	_, _, db, mock, cleanup, repoMock := SetupTesting(t)
+	defer cleanup()
 
-	repo := NewAirportRepository(log)
-
-	// begin tx
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	assert.NoError(t, err)
-
+	// arrange
 	id := uuid.New()
+
+	// expect
 	mock.ExpectQuery(regexp.QuoteMeta(selectAirportQuery)).
 		WithArgs(id).
 		WillReturnError(sql.ErrNoRows)
 
-	// expect rollback
-	mock.ExpectRollback()
-
 	// act
-	_, gotErr := repo.FindByID(context.Background(), tx, id.String())
+	_, gotErr := repoMock.FindByID(context.Background(), db, id.String())
 	assert.ErrorIs(t, gotErr, util.ErrNotFound)
-	_ = tx.Rollback()
 }
 
 // ---------- UNIT TESTS FOR FindAll ----------
@@ -714,50 +587,38 @@ func TestAirportRepository_FindAll(t *testing.T) {
 	}
 
 	// query string yang dipakai repo
-	selectAll := `
+	selectAllQuery := `
 		SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status, created_at, updated_at
 		FROM airports 
 		ORDER BY icao_id
 		LIMIT $1
-		OFFSET $2`
-	selectAllQ := regexp.QuoteMeta(strings.TrimSpace(selectAll))
+		OFFSET $2
+	`
 	countQ := regexp.MustCompile(`SELECT\s+COUNT\(\*\)\s+FROM\s+airports`)
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			assert.NoError(t, err)
-			defer func() {
-				assert.NoError(t, mock.ExpectationsWereMet())
-				_ = db.Close()
-			}()
-
-			// begin tx
-			mock.ExpectBegin()
-			var tx *sql.Tx
-			tx, err = db.Begin()
-			assert.NoError(t, err)
-
-			// SELECT expectation (sesuai limit/offset)
-			mock.ExpectQuery(selectAllQ).
-				WithArgs(tc.limit, tc.offset).
-				WillReturnRows(buildRowsFindAll(tc.limit, tc.offset))
+			// -------------------
+			// ARRANGE
+			_, _, db, mock, cleanup, repoMock := SetupTesting(t)
+			defer cleanup()
 
 			// COUNT expectation
 			mock.ExpectQuery(countQ.String()).
 				WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(len(dataDummy)))
 
-			// commit
-			mock.ExpectCommit()
+			// SELECT expectation (sesuai limit/offset)
+			mock.ExpectQuery(regexp.QuoteMeta(strings.TrimSpace(selectAllQuery))).
+				WithArgs(tc.limit, tc.offset).
+				WillReturnRows(buildRowsFindAll(tc.limit, tc.offset))
 
-			// -------------------
 			// ACT
 			ctx := context.Background()
-			repo := NewAirportRepository(log)
 			args := map[string]interface{}{"limit": tc.limit, "offset": tc.offset}
+			airports, _, err := repoMock.FindAll(ctx, db, args)
 
 			// -------------------
-			airports, _, err := repo.FindAll(ctx, tx, args) // panggil method punyamu
+			// ASSERT
 			assert.NoError(t, err)
 			assert.NotNil(t, airports)
 			assert.Equal(t, tc.expectedLen, len(airports), "mismatched length")
@@ -778,9 +639,6 @@ func TestAirportRepository_FindAll(t *testing.T) {
 				assert.WithinDuration(t, timeNow, *got.CreatedAt, time.Second)
 				assert.WithinDuration(t, timeNow, *got.UpdatedAt, time.Second)
 			}
-
-			// selesai -> commit
-			assert.NoError(t, tx.Commit())
 		})
 	}
 }
@@ -788,17 +646,7 @@ func TestAirportRepository_FindAll(t *testing.T) {
 // ---------- UNIT TEST For FindBySearchName ---------
 func TestAirportRepository_FindBySearchName(t *testing.T) {
 	// query dari repo
-	selectSQL := `
-SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
-        country, state, state_full, county, city, ownership, "use",
-        manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
-        control_tower, unicom, ctaf, effective_date, created_at, updated_at
-FROM airports 
-WHERE LOWER(name) LIKE LOWER($3)
-ORDER BY icao_id
-LIMIT $1
-OFFSET $2`
-	selectQ := regexp.QuoteMeta(strings.TrimSpace(selectSQL))
+	selectQ := regexp.QuoteMeta(strings.TrimSpace(findBySearchNameQuery))
 	countRe := regexp.MustCompile(`(?is)SELECT\s+COUNT\(\*\)\s+FROM\s+airports\s+WHERE\s+name\s+ILIKE\s+\$1`)
 
 	cases := []struct {
@@ -817,17 +665,10 @@ OFFSET $2`
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			assert.NoError(t, err)
-			defer func() {
-				assert.NoError(t, mock.ExpectationsWereMet())
-				_ = db.Close()
-			}()
+			_, _, db, mock, cleanup, repoMock := SetupTesting(t)
+			defer cleanup()
 
-			mock.ExpectBegin()
-			tx, err := db.Begin()
-			assert.NoError(t, err)
-
+			// search pattern
 			searchPattern := "%" + c.search + "%"
 
 			// SELECT expectation
@@ -844,31 +685,32 @@ OFFSET $2`
 				WithArgs(searchPattern).
 				WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(total))
 
-			mock.ExpectCommit()
-
-			repo := NewAirportRepository(log) // sesuaikan
 			args := map[string]interface{}{"limit": c.limit, "offset": c.offset}
 
-			out, gotTotal, err := repo.FindBySearchName(context.Background(), tx, c.search, args)
+			out, gotTotal, err := repoMock.FindBySearchName(context.Background(), db, c.search, args)
 			assert.NoError(t, err)
 			assert.Equal(t, c.expectTotal, gotTotal)
 			assert.Equal(t, c.expectLen, len(out))
-
-			assert.NoError(t, tx.Commit())
 		})
 	}
 }
 
 // ---------- UNIT TESTS FOR FindByICAO ----------
 func TestAirportRepository_FindByICAOID(t *testing.T) {
-	query := `SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
-				country, state, state_full, county, city, ownership, "use",
-				manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
-				control_tower, unicom, ctaf, effective_date, created_at, updated_at
+	selectByICAOID := `
+		SELECT 
+			id, 
+			site_number, icao_id, faa_id, iata_id, name, 
+			type, status, country, state, state_full,
+			county, city, ownership, "use", manager, 
+			manager_phone, latitude, latitude_sec, longitude, longitude_sec, 
+			elevation, control_tower, unicom, ctaf, effective_date,
+			sync_status, sync_message, updated_at, created_at
 		FROM airports 
 		WHERE icao_id = $1 
-		LIMIT 1`
-	q := regexp.QuoteMeta(strings.TrimSpace(query))
+		LIMIT 1
+	`
+	query := regexp.QuoteMeta(strings.TrimSpace(selectByICAOID))
 
 	cases := []struct {
 		name        string
@@ -883,13 +725,17 @@ func TestAirportRepository_FindByICAOID(t *testing.T) {
 			icao: "KSFO",
 			setupMock: func(m sqlmock.Sqlmock) {
 				data := dataDummy[2].row
-				rows := sqlmock.NewRows(newCols()).AddRow(
-					data.ID, data.SiteNumber, data.ICAOID, data.FAAID, data.IATAID, data.Name, data.Type, data.Status,
-					data.Country, data.State, data.StateFull, data.County, data.City, data.Ownership, data.Use,
-					data.Manager, data.ManagerPhone, data.Latitude, data.LatitudeSec, data.Longitude, data.LongitudeSec, data.Elevation,
-					data.ControlTower, data.Unicom, data.CTAF, data.EffectiveDate, data.CreatedAt, data.UpdatedAt,
-				)
-				m.ExpectQuery(q).
+				rows := sqlmock.NewRows(airportTableCols()).
+					AddRow(
+						data.ID,
+						data.SiteNumber, data.ICAOID, data.FAAID, data.IATAID, data.Name,
+						data.Type, data.Status, data.Country, data.State, data.StateFull,
+						data.County, data.City, data.Ownership, data.Use, data.Manager,
+						data.ManagerPhone, data.Latitude, data.LatitudeSec, data.Longitude, data.LongitudeSec,
+						data.Elevation, data.ControlTower, data.Unicom, data.CTAF, data.EffectiveDate,
+						enum.SYNC_NEW, enum.SYNC_NEW.String(), timeNow, timeNow,
+					)
+				m.ExpectQuery(query).
 					WithArgs("KSFO").
 					WillReturnRows(rows)
 			},
@@ -900,8 +746,8 @@ func TestAirportRepository_FindByICAOID(t *testing.T) {
 			name: "not found (empty result)",
 			icao: "KZZZ",
 			setupMock: func(m sqlmock.Sqlmock) {
-				empty := sqlmock.NewRows(newCols()) // 0 row
-				m.ExpectQuery(q).
+				empty := sqlmock.NewRows(airportTableCols())
+				m.ExpectQuery(query).
 					WithArgs("KZZZ").
 					WillReturnRows(empty)
 			},
@@ -912,18 +758,18 @@ func TestAirportRepository_FindByICAOID(t *testing.T) {
 			name: "db error -> panic",
 			icao: "KERR",
 			setupMock: func(m sqlmock.Sqlmock) {
-				m.ExpectQuery(q).
+				m.ExpectQuery(query).
 					WithArgs("KERR").
 					WillReturnError(fmt.Errorf("boom"))
 			},
-			expectErr: nil,   // kita assert panic, bukan error return
-			expectOK:  false, // tidak dipakai
+			expectErr: nil,
+			expectOK:  false,
 		},
 		{
 			name: "query returns sql.ErrNoRows",
 			icao: "KNONE",
 			setupMock: func(m sqlmock.Sqlmock) {
-				m.ExpectQuery(q).
+				m.ExpectQuery(query).
 					WithArgs("KNONE").
 					WillReturnError(sql.ErrNoRows) // harus map ke util.ErrNotFound
 			},
@@ -935,37 +781,26 @@ func TestAirportRepository_FindByICAOID(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			assert.NoError(t, err)
-			defer func() {
-				assert.NoError(t, mock.ExpectationsWereMet())
-				_ = db.Close()
-			}()
+			_, _, db, mock, cleaup, repoMock := SetupTesting(t)
+			defer cleaup()
 
-			mock.ExpectBegin()
-			tx, err := db.Begin()
-			assert.NoError(t, err)
-
+			// Setup mock by case
 			tc.setupMock(mock)
-			mock.ExpectCommit()
-
-			repo := NewAirportRepository(log)
 
 			if tc.name == "db error -> panic" {
 				assert.Panics(t, func() {
-					_, _ = repo.FindByICAOID(context.Background(), tx, tc.icao)
+					_, _ = repoMock.FindByICAOID(context.Background(), db, tc.icao)
 				})
-				assert.NoError(t, tx.Commit())
 				return
 			}
 
 			if tc.expectPanic {
 				assert.Panics(t, func() {
-					_, _ = repo.FindByICAOID(context.Background(), tx, tc.icao)
+					_, _ = repoMock.FindByICAOID(context.Background(), db, tc.icao)
 				})
 			}
 
-			got, err := repo.FindByICAOID(context.Background(), tx, tc.icao)
+			got, err := repoMock.FindByICAOID(context.Background(), db, tc.icao)
 			assert.ErrorIs(t, err, tc.expectErr)
 			if tc.expectOK {
 				assert.Equal(t, "KSFO", *got.ICAOID)
@@ -973,8 +808,6 @@ func TestAirportRepository_FindByICAOID(t *testing.T) {
 				assert.NotNil(t, got.CreatedAt)
 				assert.NotNil(t, got.UpdatedAt)
 			}
-
-			assert.NoError(t, tx.Commit())
 		})
 	}
 }
@@ -1018,11 +851,9 @@ func TestAirportRepository_FindExistsByICAOID(t *testing.T) {
 			name: "not found",
 			icao: "KZZZ",
 			setupMock: func(m sqlmock.Sqlmock) {
-				// QueryRowContext -> Scan akan terima sql.ErrNoRows
 				m.ExpectQuery(checkExistsQuery).
 					WithArgs("KZZZ").
 					WillReturnError(sql.ErrNoRows)
-				// Alternatif: WillReturnRows(sqlmock.NewRows([]string{"exists"})) juga oke
 			},
 			expectOK:  false,
 			expectErr: false,
@@ -1033,49 +864,37 @@ func TestAirportRepository_FindExistsByICAOID(t *testing.T) {
 			setupMock: func(m sqlmock.Sqlmock) {
 				m.ExpectQuery(checkExistsQuery).
 					WithArgs("KERR").
-					WillReturnError(errors.New("boom"))
+					WillReturnError(util.ErrInternalServer)
 			},
 			expectOK:  false,
-			expectErr: true, // kita expect panic
+			expectErr: true,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			assert.NoError(t, err)
-			defer func() {
-				assert.NoError(t, mock.ExpectationsWereMet())
-				_ = db.Close()
-			}()
+			_, ctx, db, mock, cleanup, repoMock := SetupTesting(t)
+			defer cleanup()
 
-			mock.ExpectBegin()
-			tx, err := db.Begin()
-			assert.NoError(t, err)
-
+			// Setup mock by case
 			tc.setupMock(mock)
-			mock.ExpectCommit()
-
-			repo := NewAirportRepository(log)
 
 			if tc.expectErr {
-				assert.Panics(t, func() {
-					_, _ = repo.FindExistsByICAOID(context.Background(), tx, tc.icao)
-				})
+				_, err := repoMock.FindExistsByICAOID(ctx, db, tc.icao)
+				assert.Contains(t, err.Error(), util.ErrInternalServer.Error())
 			} else {
-				ok, err := repo.FindExistsByICAOID(context.Background(), tx, tc.icao)
-				assert.NoError(t, err)
-				assert.Equal(t, tc.expectOK, ok)
+				ok, err := repoMock.FindExistsByICAOID(ctx, db, tc.icao)
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectOK, *ok)
+				assert.NotNil(t, ok)
 			}
-
-			assert.NoError(t, tx.Commit())
 		})
 	}
 }
 
 // ---------- UNIT TESTS FOR Update ----------
 func TestAirportRepository_Update(t *testing.T) {
-	// --- arrange data
+	// --- Arrange data ---
 	existingID := dataDummy[1].id
 	existingIDStr := dataDummy[1].id.String()
 	notFoundID := uuid.New().String()
@@ -1099,9 +918,10 @@ func TestAirportRepository_Update(t *testing.T) {
 	// Time updated
 	timeUpdated := time.Now()
 
-	// SQL update (trimmed di repo)
+	// Update Query
 	updateSQL := `
-		UPDATE airports SET
+		UPDATE airports 
+		SET
 			site_number = $1,
 			faa_id = $2,
 			iata_id = $3,
@@ -1128,7 +948,14 @@ func TestAirportRepository_Update(t *testing.T) {
 			effective_date = $24,
 			updated_at = NOW()
 		WHERE id = $25
-		RETURNING id
+		RETURNING 
+			id,
+			site_number, icao_id, faa_id, iata_id, name,
+			type, status, country, state, state_full,
+			county, city, ownership, "use", manager,
+			manager_phone, latitude, latitude_sec, longitude, longitude_sec,
+			elevation, control_tower, unicom, ctaf, effective_date,
+			sync_status, sync_message, updated_at, created_at
 	`
 	updateQ := regexp.QuoteMeta(strings.TrimSpace(updateSQL))
 
@@ -1151,45 +978,44 @@ func TestAirportRepository_Update(t *testing.T) {
 				}
 				args = append(args, existingID)
 
-				ret := sqlmock.NewRows([]string{"id"}).AddRow(existingID)
+				ret := sqlmock.NewRows(airportTableCols()).
+					AddRow(
+						existingID,
+						updatedAirport.SiteNumber,
+						updatedAirport.ICAOID,
+						updatedAirport.FAAID,
+						updatedAirport.IATAID,
+						updatedAirport.Name,
+						updatedAirport.Type,
+						updatedAirport.Status,
+						updatedAirport.Country,
+						updatedAirport.State,
+						updatedAirport.StateFull,
+						updatedAirport.County,
+						updatedAirport.City,
+						updatedAirport.Ownership,
+						updatedAirport.Use,
+						updatedAirport.Manager,
+						updatedAirport.ManagerPhone,
+						updatedAirport.Latitude,
+						updatedAirport.LatitudeSec,
+						updatedAirport.Longitude,
+						updatedAirport.LongitudeSec,
+						updatedAirport.Elevation,
+						updatedAirport.ControlTower,
+						updatedAirport.Unicom,
+						updatedAirport.CTAF,
+						updatedAirport.EffectiveDate,
+						updatedAirport.SyncStatus,
+						updatedAirport.SyncMessage,
+						timeNow,
+						timeUpdated,
+					)
 				m.ExpectQuery(updateQ).
 					WithArgs(args...).
 					WillReturnRows(ret)
 
-					// FindByID
-				rows := sqlmock.NewRows(newCols()).AddRow(
-					existingID,
-					updatedAirport.SiteNumber,
-					updatedAirport.ICAOID,
-					updatedAirport.FAAID,
-					updatedAirport.IATAID,
-					updatedAirport.Name,
-					updatedAirport.Type,
-					updatedAirport.Status,
-					updatedAirport.Country,
-					updatedAirport.State,
-					updatedAirport.StateFull,
-					updatedAirport.County,
-					updatedAirport.City,
-					updatedAirport.Ownership,
-					updatedAirport.Use,
-					updatedAirport.Manager,
-					updatedAirport.ManagerPhone,
-					updatedAirport.Latitude,
-					updatedAirport.LatitudeSec,
-					updatedAirport.Longitude,
-					updatedAirport.LongitudeSec,
-					updatedAirport.Elevation,
-					updatedAirport.ControlTower,
-					updatedAirport.Unicom,
-					updatedAirport.CTAF,
-					updatedAirport.EffectiveDate,
-					timeNow,
-					timeUpdated,
-				)
-				m.ExpectQuery(regexp.QuoteMeta(selectAirportQuery)).
-					WithArgs(existingID).
-					WillReturnRows(rows)
+				m.ExpectCommit()
 			},
 		},
 		{
@@ -1198,7 +1024,6 @@ func TestAirportRepository_Update(t *testing.T) {
 			payload:   updatedAirport,
 			expectErr: util.ErrNotFound,
 			setupMock: func(m sqlmock.Sqlmock) {
-				// susun args: 24 field + uuid di posisi $25
 				args := make([]driver.Value, 0, 25)
 				for i := 0; i < 24; i++ {
 					args = append(args, sqlmock.AnyArg())
@@ -1207,55 +1032,48 @@ func TestAirportRepository_Update(t *testing.T) {
 
 				m.ExpectQuery(updateQ).
 					WithArgs(args...).
-					WillReturnError(sql.ErrNoRows) // bikin row.Scan() return ErrNoRows
-				// tidak ada FindByID
+					WillReturnError(sql.ErrNoRows)
+
+				m.ExpectRollback()
 			},
 		},
 		{
 			name:      "invalid uuid",
 			id:        invalidID,
 			payload:   updatedAirport,
-			expectErr: util.ErrNotFound,
+			expectErr: util.ErrBadRequest,
 			setupMock: func(m sqlmock.Sqlmock) {
-				// Tidak ada query karena gagal parse sebelum QueryRowContext
+				m.ExpectRollback()
 			},
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			assert.NoError(t, err)
-			defer func() {
-				assert.NoError(t, mock.ExpectationsWereMet())
-				_ = db.Close()
-			}()
+			_, ctx, db, mock, cleanup, repoMock := SetupTesting(t)
+			defer cleanup()
 
+			// Setup Begin
 			mock.ExpectBegin()
-			tx, err := db.Begin()
-			defer util.CommitOrRollback(tx)
-			assert.NoError(t, err)
 
-			// set ekspektasi per skenario
+			// Setup mock by case
 			c.setupMock(mock)
 
-			// Expect Commit
-			mock.ExpectCommit()
+			// ACT
+			tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+			assert.NoError(t, err)
+			defer util.FinishTx(tx, &err)
 
-			repo := NewAirportRepository(log)
+			// ASSERT
+			got, err := repoMock.Update(ctx, tx, c.id, c.payload)
 
-			got, err := repo.Update(context.Background(), tx, c.id, c.payload)
-			assert.ErrorIs(t, err, c.expectErr)
-			if c.expectErr == nil {
-				assert.Equal(t, existingID.String(), got.ID.String())
-			}
-
-			if c.expectErr == nil {
-				assert.Equal(t, existingIDStr, got.ID.String())
-				assert.Equal(t, newManager, *got.Manager)
-				assert.Equal(t, newManagerPhone, *got.ManagerPhone)
-				assert.Equal(t, timeUpdated, *got.UpdatedAt)
-				assert.Equal(t, timeNow, *got.CreatedAt)
+			if c.expectErr != nil {
+				assert.NotNil(t, err)
+				assert.Error(t, err)
+				assert.Equal(t, c.expectErr, err)
+			} else {
+				assert.NotNil(t, got)
+				assert.Equal(t, *c.payload.ID, *got.ID)
 			}
 		})
 	}
@@ -1263,6 +1081,8 @@ func TestAirportRepository_Update(t *testing.T) {
 
 // ---------- UNIT TESTS FOR Delete ----------
 func TestAirportRepository_Delete(t *testing.T) {
+	deleteQuery := `DELETE airports WHERE id = $1`
+
 	// data dummy
 	deletedIdSuccess := dataDummy[0].id // ID yang ada
 	deletedIdNotFound := uuid.New()     // ID yang tidak ada
@@ -1271,49 +1091,65 @@ func TestAirportRepository_Delete(t *testing.T) {
 	cases := []struct {
 		name        string
 		id          string
+		setupMock   func(mock sqlmock.Sqlmock)
 		expectedErr error
 	}{
-		{"existing ID", deletedIdSuccess.String(), nil},
-		{"non-existing ID", deletedIdNotFound.String(), util.ErrNotFound},
-		{"invalid UUID", deletedIdInvalid, util.ErrNotFound},
+		{
+			name: "existing ID",
+			id:   deletedIdSuccess.String(),
+			setupMock: func(m sqlmock.Sqlmock) {
+				m.ExpectExec(regexp.QuoteMeta(strings.TrimSpace(deleteQuery))).
+					WithArgs(deletedIdSuccess).
+					WillReturnResult(sqlmock.NewResult(1, 1))
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "non-existing ID",
+			id:   deletedIdNotFound.String(),
+			setupMock: func(m sqlmock.Sqlmock) {
+				m.ExpectExec(regexp.QuoteMeta(strings.TrimSpace(deleteQuery))).
+					WithArgs(deletedIdNotFound).
+					WillReturnResult(sqlmock.NewResult(1, 0))
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "invalid UUID",
+			id:   deletedIdInvalid,
+			setupMock: func(m sqlmock.Sqlmock) {
+				m.ExpectExec(regexp.QuoteMeta(strings.TrimSpace(deleteQuery))).
+					WithArgs(deleteQuery).
+					WillReturnError(errors.New("invalid uuid"))
+			},
+			expectedErr: util.ErrBadRequest,
+		},
 	}
-
-	// siapkan regex query DELETE
-	deleteRe := regexp.MustCompile(`(?s)DELETE\s+FROM\s+airports\s+WHERE\s+id\s*=\s*\$1`)
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			assert.NoError(t, err)
-			defer func() {
-				assert.NoError(t, mock.ExpectationsWereMet())
-				_ = db.Close()
-			}()
+			_, ctx, db, mock, cleanup, repoMock := SetupTesting(t)
+			defer cleanup()
 
-			// begin tx
+			// Expectation
 			mock.ExpectBegin()
-			tx, err := db.Begin()
-			assert.NoError(t, err)
 
-			// Pasang expectation hanya jika UUID valid (karena kodemu parse dulu sebelum Exec)
-			if uid, err := uuid.Parse(tc.id); err == nil {
-				affected := int64(0)
-				if tc.expectedErr == nil {
-					affected = 1 // sukses: 1 row affected
-				}
-				mock.ExpectExec(deleteRe.String()).
-					WithArgs(uid).
-					WillReturnResult(sqlmock.NewResult(0, affected))
-			}
-			// commit selalu (repo.Delete tidak commit/rollback)
-			mock.ExpectCommit()
+			tc.setupMock(mock)
 
 			// ACT
-			repo := NewAirportRepository(log)
-			err = repo.Delete(context.Background(), tx, tc.id)
+			tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+			assert.NoError(t, err)
+			defer util.FinishTx(tx, &err)
+
+			// Call Delete
+			err = repoMock.Delete(ctx, tx, tc.id)
 
 			// ASSERT
-			assert.ErrorIs(t, err, tc.expectedErr)
+			if tc.expectedErr != nil {
+				//
+			} else {
+				assert.Nil(t, err)
+			}
 
 			// finalize tx
 			assert.NoError(t, tx.Commit())

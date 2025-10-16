@@ -15,13 +15,23 @@ func ToJSON(data interface{}) ([]byte, error) {
 	return bytes, err
 }
 
-func ReadFromRequestBody(request *http.Request, result interface{}) {
+func ReadFromRequestBody(request *http.Request, result interface{}) error {
 	decoder := json.NewDecoder(request.Body)
 	err := decoder.Decode(result)
-	PanicIfError(err)
+	if err != nil {
+		return NewErrorException(ErrBadRequest, "Invalid request body: "+err.Error())
+	}
+
+	val := NewValidator()
+	err = val.Struct(result)
+	if err != nil {
+		return NewErrorException(ErrValidation, "Validation error: "+err.Error())
+	}
+
+	return nil
 }
 
-func WriteToResponseBody(writer http.ResponseWriter, status int, response any) {
+func WriteToResponseBody(writer http.ResponseWriter, status int, response any) error {
 	if status == 0 {
 		status = http.StatusOK
 	}
@@ -30,5 +40,10 @@ func WriteToResponseBody(writer http.ResponseWriter, status int, response any) {
 	writer.WriteHeader(status)
 	encoder := json.NewEncoder(writer)
 	err := encoder.Encode(response)
-	PanicIfError(err)
+
+	if err != nil {
+		return ErrInternalServer
+	}
+
+	return nil
 }

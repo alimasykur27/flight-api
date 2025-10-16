@@ -36,8 +36,8 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 	s.logger.Debug("[GetWeatherCondition] Fetching weather data from Weather APIs...")
 
 	if loc == nil {
-		s.logger.Errorf("[GetWeatherCondition] Failed to fetch weather data: %v", util.ErrBadRequest)
-		return nil, util.ErrBadRequest
+		s.logger.Errorf("[GetWeatherCondition] 'loc' query parameter is required")
+		return nil, util.NewErrorException(util.ErrBadRequest, "'loc' query parameter is required")
 	}
 
 	location := url.QueryEscape(strings.ToUpper(*loc))
@@ -51,12 +51,11 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 
 		var ne net.Error
 		if errors.As(err, &ne) && ne.Timeout() {
-			return nil, util.ErrGatewayTimeout
+			return nil, util.NewErrorException(util.ErrTimeout, "request to weather API timed out")
 		}
 
-		return nil, util.ErrInternalServer
+		return nil, util.NewErrorException(util.ErrInternalServer, "failed to fetch weather data: "+err.Error())
 	}
-
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -67,27 +66,27 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 		err = util.ParseJSON(errBody, &errData)
 		if err != nil {
 			s.logger.Errorf("[GetWeatherCondition] Failed to unmarshal error response body: %v", err)
-			return nil, util.ErrInternalServer
+			return nil, util.NewErrorException(util.ErrInternalServer, "failed to unmarshal error response body: "+err.Error())
 		}
 
 		errorCode, ok := errData["error"]["code"].(float64)
 		if !ok {
 			s.logger.Errorf("[GetWeatherCondition] Failed to assert error code to float64: %v", errData["error"]["code"])
-			return nil, util.ErrInternalServer
+			return nil, util.NewErrorException(util.ErrInternalServer, "failed to assert error code to float64: "+err.Error())
 		}
 
 		switch errorCode {
 		case 1006:
 			s.logger.Error("[GetWeatherCondition] Error code: ", errorCode)
-			return nil, util.ErrNotFound
+			return nil, util.NewErrorException(util.ErrNotFound, "no matching location found")
 		case 1003:
 			s.logger.Error("[GetWeatherCondition] Error code: ", errorCode)
-			return nil, util.ErrBadRequest
+			return nil, util.NewErrorException(util.ErrBadRequest, "bad request")
 		case 1002:
 			s.logger.Error("[GetWeatherCondition] Error code: ", errorCode)
-			return nil, util.ErrUnauthorized
+			return nil, util.NewErrorException(util.ErrUnauthorized, "unauthorized")
 		default:
-			return nil, util.ErrBadRequest
+			return nil, util.NewErrorException(util.ErrBadRequest, "bad request")
 		}
 	}
 
@@ -95,7 +94,7 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		s.logger.Errorf("[GetWeatherCondition] Failed to read response body: %v", err)
-		return nil, util.ErrInternalServer
+		return nil, util.NewErrorException(util.ErrInternalServer, "failed to read response body: "+err.Error())
 	}
 
 	data := weather_dto.WeatherDto{
@@ -107,7 +106,7 @@ func (s *WeatherService) GetWeatherCondition(ctx context.Context, loc *string) (
 	err = util.ParseJSON(body, &data)
 	if err != nil {
 		s.logger.Debugf("[GetWeatherCondition] Failed to unmarshal response body: %v", err)
-		return nil, util.ErrInternalServer
+		return nil, util.NewErrorException(util.ErrInternalServer, "failed to unmarshal response body: "+err.Error())
 	}
 
 	s.logger.Debug("[GetWeatherCondition] Finished fetching weather data.")

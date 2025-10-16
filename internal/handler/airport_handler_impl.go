@@ -7,7 +7,6 @@ import (
 	service_airport "flight-api/internal/service/airport"
 	"flight-api/pkg/logger"
 	"flight-api/util"
-	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -35,7 +34,7 @@ func (h *AirportHandler) RegisterRouter(r chi.Router) {
 		r.Get("/{id}", h.FindByID)
 		r.Put("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
-		// r.Get("/weathers", h.GetWeatherCondition)
+		r.Get("/weathers", h.GetWeatherCondition)
 	}
 
 	// Airports Endpoints
@@ -44,21 +43,30 @@ func (h *AirportHandler) RegisterRouter(r chi.Router) {
 
 // Create Airport Data
 func (h *AirportHandler) Create(w http.ResponseWriter, r *http.Request) {
+	// Parse request body
 	airportReq := airport_dto.AirportRequestDto{}
-	util.ReadFromRequestBody(r, &airportReq)
+	err := util.ReadFromRequestBody(r, &airportReq)
 
+	if err != nil {
+		h.logger.Errorf("[Create] Failed to read request body: %v", err)
+		util.ErrorHandler(w, util.NewErrorException(err, "invalid request body: "+err.Error()))
+		return
+	}
+
+	// Call service
 	airportResponse, err := h.airportService.Create(r.Context(), airportReq)
 	if err != nil {
-		h.logger.Errorf("[Create] Failed to create airport: %v", err)
-		util.ErrorHandler(w, err)
+		h.logger.Errorf("[Create] Failed to create airport: %v", err.Error())
+		util.ErrorHandler(w, util.NewErrorException(err, "failed to create airport: "+err.Error()))
 		return
 	}
 
 	// Response (201 Created)
 	response := response_dto.ResponseDto{
-		Code:   http.StatusCreated,
-		Status: "Created",
-		Data:   airportResponse,
+		Code:    http.StatusCreated,
+		Status:  "Created",
+		Data:    airportResponse,
+		Message: "airport created successfully",
 	}
 
 	util.WriteToResponseBody(w, http.StatusCreated, response)
@@ -71,15 +79,16 @@ func (h *AirportHandler) FindAll(w http.ResponseWriter, r *http.Request) {
 	airportResponses, err := h.airportService.FindAll(r.Context(), query)
 	if err != nil {
 		h.logger.Errorf("[FindAll] Failed to fetch airports: %v", err)
-		util.ErrorHandler(w, err)
+		util.ErrorHandler(w, util.NewErrorException(err, "failed to fetch airports"))
 		return
 	}
 
 	// Response (200 OK)
 	response := response_dto.ResponseDto{
-		Code:   http.StatusOK,
-		Status: "OK",
-		Data:   airportResponses,
+		Code:    http.StatusOK,
+		Status:  "OK",
+		Data:    airportResponses,
+		Message: "airports fetched successfully",
 	}
 
 	util.WriteToResponseBody(w, http.StatusOK, response)
@@ -92,31 +101,17 @@ func (h *AirportHandler) FindByID(w http.ResponseWriter, r *http.Request) {
 	airportResponse, err := h.airportService.FindByID(r.Context(), id)
 
 	if err != nil {
-		if err == util.ErrNotFound {
-			response := response_dto.ResponseDto{
-				Code:   http.StatusNotFound,
-				Status: "Not Found",
-				Data:   nil,
-			}
-			util.WriteToResponseBody(w, http.StatusNotFound, response)
-
-			return
-		}
-
-		response := response_dto.ResponseDto{
-			Code:   http.StatusInternalServerError,
-			Status: "Internal Server Error",
-			Data:   nil,
-		}
-		util.WriteToResponseBody(w, http.StatusInternalServerError, response)
-
+		h.logger.Errorf("[FindByID] Failed to fetch airport by ID: %v", err)
+		util.ErrorHandler(w, util.NewErrorException(err, "failed to fetch airport by ID: "+err.Error()))
 		return
 	}
 
+	// Response (200 OK)
 	response := response_dto.ResponseDto{
-		Code:   http.StatusOK,
-		Status: "OK",
-		Data:   airportResponse,
+		Code:    http.StatusOK,
+		Status:  "OK",
+		Data:    airportResponse,
+		Message: "airport fetched successfully",
 	}
 
 	util.WriteToResponseBody(w, http.StatusOK, response)
@@ -132,41 +127,19 @@ func (h *AirportHandler) Update(w http.ResponseWriter, r *http.Request) {
 	airportResponse, err := h.airportService.Update(r.Context(), id, airportUpdate)
 
 	if err != nil {
-		switch {
-		case err == util.ErrBadRequest:
-			response := response_dto.ResponseDto{
-				Code:   http.StatusBadRequest,
-				Status: "Bad Request",
-				Data:   nil,
-			}
-			util.WriteToResponseBody(w, http.StatusBadRequest, response)
-
-			return
-		case err == util.ErrNotFound:
-			response := response_dto.ResponseDto{
-				Code:   http.StatusNotFound,
-				Status: "Not Found",
-				Data:   nil,
-			}
-			util.WriteToResponseBody(w, http.StatusNotFound, response)
-
-			return
-		default:
-			response := response_dto.ResponseDto{
-				Code:   http.StatusInternalServerError,
-				Status: "Internal Server Error",
-				Data:   nil,
-			}
-			util.WriteToResponseBody(w, http.StatusInternalServerError, response)
-
-			return
-		}
+		h.logger.Errorf("[Update] Failed to update airport: %v", err)
+		util.ErrorHandler(w, util.NewErrorException(err, "failed to update airport"))
+		return
 	}
 
+	h.logger.Debugf("Airport with ID %s updated successfully", id)
+
+	// Response (200 OK)
 	response := response_dto.ResponseDto{
-		Code:   http.StatusOK,
-		Status: "OK",
-		Data:   airportResponse,
+		Code:    http.StatusOK,
+		Status:  "OK",
+		Data:    airportResponse,
+		Message: "airport updated successfully",
 	}
 
 	util.WriteToResponseBody(w, http.StatusOK, response)
@@ -179,37 +152,17 @@ func (h *AirportHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	err := h.airportService.Delete(r.Context(), id)
 
 	if err != nil {
-		switch {
-		case err == util.ErrNotFound:
-			response := response_dto.ResponseDto{
-				Code:    http.StatusNotFound,
-				Status:  "Not Found",
-				Data:    nil,
-				Message: fmt.Sprintf("Airport with ID %s not found", id),
-			}
-			util.WriteToResponseBody(w, http.StatusNotFound, response)
-
-			return
-		default:
-			response := response_dto.ResponseDto{
-				Code:    http.StatusInternalServerError,
-				Status:  "Internal Server Error",
-				Data:    nil,
-				Message: err.Error(),
-			}
-			util.WriteToResponseBody(w, http.StatusInternalServerError, response)
-
-			return
-		}
+		h.logger.Errorf("[Delete] Failed to delete airport: %v", err)
+		util.ErrorHandler(w, util.NewErrorException(err, "failed to delete airport: "+err.Error()))
+		return
 	}
 
 	h.logger.Debugf("Airport with ID %s deleted successfully", id)
-
 	response := response_dto.ResponseDto{
 		Code:    http.StatusOK,
 		Status:  "OK",
 		Data:    nil,
-		Message: fmt.Sprintf("Airport with ID %s deleted successfully", id),
+		Message: "airport deleted successfully",
 	}
 
 	util.WriteToResponseBody(w, http.StatusOK, response)
@@ -245,34 +198,25 @@ func (h *AirportHandler) GetWeatherCondition(w http.ResponseWriter, r *http.Requ
 		}
 
 		util.WriteToResponseBody(w, http.StatusBadRequest, response)
+		return
 	}
 
 	// Call service
 	data, err := h.airportService.GetWeatherCondition(r.Context(), code, name, query)
 
-	switch {
-	case err == nil:
-		response = response_dto.ResponseDto{
-			Code:    http.StatusOK,
-			Status:  "OK",
-			Data:    data,
-			Message: "Success",
-		}
-	case err == util.ErrNotFound:
-		response = response_dto.ResponseDto{
-			Code:    http.StatusNotFound,
-			Status:  "Not Found",
-			Data:    nil,
-			Message: "Airport and weather data not found",
-		}
-	default:
-		response = response_dto.ResponseDto{
-			Code:    http.StatusInternalServerError,
-			Status:  "Internal Server Error",
-			Data:    nil,
-			Message: err.Error(),
-		}
+	if err != nil {
+		h.logger.Errorf("[GetWeatherCondition] Failed to get weather condition: %v", err)
+		util.ErrorHandler(w, util.NewErrorException(err, "failed to get weather condition: "+err.Error()))
+		return
 	}
+	h.logger.Debugf("Get weather condition success")
 
+	// Response (200 OK)
+	response = response_dto.ResponseDto{
+		Code:    http.StatusOK,
+		Status:  "OK",
+		Data:    data,
+		Message: "weather condition fetched successfully",
+	}
 	util.WriteToResponseBody(w, http.StatusOK, response)
 }

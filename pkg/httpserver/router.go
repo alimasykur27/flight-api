@@ -25,7 +25,7 @@ func NewRouter(handlers ...Handler) *chi.Mux {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(mid.HTTPLogger)
-	r.Use(middleware.Recoverer)
+	r.Use(mid.RecoverMiddleware)
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	// CORS middleware
