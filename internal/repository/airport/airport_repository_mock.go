@@ -78,8 +78,8 @@ func (r *AirportRepositoryMock) FindExistsByICAOID(ctx context.Context, tx *sql.
 	return exists, args.Error(1)
 }
 
-func (r *AirportRepositoryMock) FindByICAOID(ctx context.Context, tx *sql.Tx, icaoId string) (model.Airport, error) {
-	call := r.Mock.Called(ctx, tx, icaoId)
+func (r *AirportRepositoryMock) FindByICAOID(ctx context.Context, db *sql.DB, icaoId string) (model.Airport, error) {
+	call := r.Mock.Called(ctx, db, icaoId)
 	var out model.Airport
 	if v, ok := call.Get(0).(model.Airport); ok {
 		out = v

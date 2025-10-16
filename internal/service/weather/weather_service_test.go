@@ -250,8 +250,9 @@ func TestNewWeatherService(t *testing.T) {
 	cfg := &config.Config{
 		WeatherURL:    "http://example.com",
 		WeatherAPIKey: "test_api_key",
+		RedisEnable:   false,
 	}
-	svc := NewWeatherService(log, cfg)
+	svc := NewWeatherService(log, cfg, nil)
 	assert.NotNil(t, svc, "WeatherService should not be nil")
 	assert.Equal(t, log, svc.(*WeatherService).logger, "Logger should match")
 	assert.Equal(t, cfg, svc.(*WeatherService).cfg, "Config should match")

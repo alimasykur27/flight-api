@@ -943,8 +943,6 @@ func TestAirportRepository_FindByICAOID(t *testing.T) {
 			}()
 
 			mock.ExpectBegin()
-			tx, err := db.Begin()
-			assert.NoError(t, err)
 
 			tc.setupMock(mock)
 			mock.ExpectCommit()
@@ -953,19 +951,18 @@ func TestAirportRepository_FindByICAOID(t *testing.T) {
 
 			if tc.name == "db error -> panic" {
 				assert.Panics(t, func() {
-					_, _ = repo.FindByICAOID(context.Background(), tx, tc.icao)
+					_, _ = repo.FindByICAOID(context.Background(), db, tc.icao)
 				})
-				assert.NoError(t, tx.Commit())
 				return
 			}
 
 			if tc.expectPanic {
 				assert.Panics(t, func() {
-					_, _ = repo.FindByICAOID(context.Background(), tx, tc.icao)
+					_, _ = repo.FindByICAOID(context.Background(), db, tc.icao)
 				})
 			}
 
-			got, err := repo.FindByICAOID(context.Background(), tx, tc.icao)
+			got, err := repo.FindByICAOID(context.Background(), db, tc.icao)
 			assert.ErrorIs(t, err, tc.expectErr)
 			if tc.expectOK {
 				assert.Equal(t, "KSFO", *got.ICAOID)
@@ -973,8 +970,6 @@ func TestAirportRepository_FindByICAOID(t *testing.T) {
 				assert.NotNil(t, got.CreatedAt)
 				assert.NotNil(t, got.UpdatedAt)
 			}
-
-			assert.NoError(t, tx.Commit())
 		})
 	}
 }

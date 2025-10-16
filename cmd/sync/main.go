@@ -76,7 +76,12 @@ func main() {
 
 	// Initialize Config
 	cfg, err := config.Load()
-	util.PanicIfError(err)
+	if err != nil {
+		log.Fatalf("Failed load env variable: %v", err)
+		return
+	} else {
+		log.Info("Successfully load env variable!")
+	}
 
 	// Connect to database
 	log.Info("Connecting to database ...")

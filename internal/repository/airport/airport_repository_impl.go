@@ -72,7 +72,9 @@ func (r *AirportRepository) Insert(ctx context.Context, tx *sql.Tx, airport mode
 	row.Scan(&id)
 
 	result, err := r.FindByID(ctx, tx, id)
-	util.PanicIfError(err)
+	if err != nil {
+		return model.Airport{}, err
+	}
 
 	r.logger.Debug("Inserted airport with ID:", id)
 	return result, nil
@@ -131,7 +133,9 @@ func (r *AirportRepository) SyncAirport(ctx context.Context, tx *sql.Tx, airport
 	row.Scan(&id)
 
 	result, err := r.FindByID(ctx, tx, id)
-	util.PanicIfError(err)
+	if err != nil {
+		return model.Airport{}, err
+	}
 
 	r.logger.Debugf("Inserted airport with ID: %s", id)
 	return result, nil
@@ -327,7 +331,7 @@ func (r *AirportRepository) FindExistsByICAOID(ctx context.Context, tx *sql.Tx, 
 	return true, nil
 }
 
-func (r *AirportRepository) FindByICAOID(ctx context.Context, tx *sql.Tx, icaoId string) (model.Airport, error) {
+func (r *AirportRepository) FindByICAOID(ctx context.Context, db *sql.DB, icaoId string) (model.Airport, error) {
 	SQL := `SELECT id, site_number, icao_id, faa_id, iata_id, name, type, status,
 			country, state, state_full, county, city, ownership, "use",
 			manager, manager_phone, latitude, latitude_sec, longitude, longitude_sec, elevation,
@@ -336,7 +340,7 @@ func (r *AirportRepository) FindByICAOID(ctx context.Context, tx *sql.Tx, icaoId
 		WHERE icao_id = $1 
 		LIMIT 1`
 
-	rows, err := tx.QueryContext(ctx, strings.TrimSpace(SQL), icaoId)
+	rows, err := db.QueryContext(ctx, strings.TrimSpace(SQL), icaoId)
 	if err == sql.ErrNoRows {
 		return model.Airport{}, util.ErrNotFound
 	}

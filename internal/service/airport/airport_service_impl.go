@@ -3,12 +3,16 @@ package service_airport
 import (
 	"context"
 	"database/sql"
+	"flight-api/config"
+	"flight-api/internal/cache"
 	dto "flight-api/internal/dto/airport"
 	pagination_dto "flight-api/internal/dto/pagination"
 	queryparams "flight-api/internal/dto/query_params"
 	weather_dto "flight-api/internal/dto/weather"
+	"flight-api/internal/model"
 	repository_airport "flight-api/internal/repository/airport"
 	service_weather "flight-api/internal/service/weather"
+	"time"
 
 	"flight-api/pkg/logger"
 	"flight-api/util"
@@ -18,23 +22,29 @@ import (
 
 type AirportService struct {
 	logger            *logger.Logger
+	cfg               *config.Config
 	validate          *validator.Validate
 	db                *sql.DB
+	cache             cache.ICache
 	airportRepository repository_airport.IAirportRepository
 	weatherService    service_weather.IWeatherService
 }
 
 func NewAirportService(
 	logger *logger.Logger,
+	cfg *config.Config,
 	validate *validator.Validate,
 	db *sql.DB,
+	cache cache.ICache,
 	airportRepository repository_airport.IAirportRepository,
 	weatherService service_weather.IWeatherService,
 ) IAirportService {
 	return &AirportService{
 		logger:            logger,
+		cfg:               cfg,
 		validate:          validate,
 		db:                db,
+		cache:             cache,
 		airportRepository: airportRepository,
 		weatherService:    weatherService,
 	}
@@ -179,35 +189,70 @@ func (s *AirportService) GetWeatherCondition(ctx context.Context, code string, n
 func (s *AirportService) getWeatherConditionByCode(ctx context.Context, code string) (*pagination_dto.PaginationDto, error) {
 	s.logger.Debugf("[getWeatherConditionByCode] Fetching weather data from Weather APIs...")
 
-	tx, err := s.db.Begin()
-	util.PanicIfError(err)
-	defer util.CommitOrRollback(tx)
+	airportWeather := []dto.AirportWeatherDto{}
+	var airportData model.Airport
+	var isExists bool = false
+
+	// // Find Airport On redis first
+	if s.cfg.RedisEnable {
+		airportCache, err := s.cache.FindAirportByICAOID(ctx, code)
+
+		if err == nil {
+			s.logger.Debug("[getWeatherConditionByCode] Airport data cache is found on redis")
+			isExists = true
+			airportData = *airportCache
+		} else {
+			s.logger.Warn("[getWeatherConditionByCode] Airport data cache not found.")
+			isExists = false
+		}
+	}
 
 	// Find Airport By ICAO ID
-	airport, err := s.airportRepository.FindByICAOID(ctx, tx, code)
+	if !isExists {
+		airportData, err := s.airportRepository.FindByICAOID(ctx, s.db, code)
 
-	if err == util.ErrNotFound {
-		return nil, util.ErrNotFound
-	} else if err != nil {
-		return nil, util.ErrInternalServer
+		if err == util.ErrNotFound {
+			return nil, util.ErrNotFound
+		} else if err != nil {
+			return nil, util.ErrInternalServer
+		}
+
+		if s.cfg.RedisEnable {
+			c := code
+			p := airportData
+
+			go func(ctx context.Context, key string, payload model.Airport) {
+				if err := s.cache.CacheAirport(ctx, key, &payload, 30*time.Minute); err != nil {
+					s.logger.Errorf("[getWeatherConditionByCode] Failed to cache airport data to Redis: %v", err)
+				} else {
+					s.logger.Debug("[getWeatherConditionByCode] Successfully cached airport data to Redis.")
+				}
+			}(ctx, c, p)
+		}
 	}
 
 	// Get Airport Weather Condition
-	weather, _ := s.weatherService.GetWeatherCondition(ctx, airport.City)
+	weather, _ := s.weatherService.GetWeatherCondition(ctx, airportData.City)
 
-	data := []dto.AirportWeatherDto{}
-	airportWeather := dto.AirportWeatherDto{
-		Object:  "airport_weather",
-		Code:    airport.ICAOID,
-		Airport: util.Ptr(dto.ToAirportDto(airport)),
-		Weather: weather.Current,
+	currentWeatther := &weather_dto.CurrentWeatherDto{}
+	if weather == nil {
+		currentWeatther = nil
+	} else {
+		currentWeatther = weather.Current
 	}
-	data = append(data, airportWeather)
+
+	data := dto.AirportWeatherDto{
+		Object:  "airport_weather",
+		Code:    airportData.ICAOID,
+		Airport: util.Ptr(dto.ToAirportDto(airportData)),
+		Weather: currentWeatther,
+	}
+	airportWeather = append(airportWeather, data)
 
 	response := pagination_dto.PaginationDto{
 		Object:  "pagination",
-		Records: util.ToInterfaces(data),
-		Total:   len(data),
+		Records: util.ToInterfaces(airportWeather),
+		Total:   len(airportWeather),
 		Meta:    nil,
 	}
 

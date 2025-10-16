@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flight-api/config"
+	"flight-api/internal/cache"
 	"flight-api/internal/handler"
 	repo_airport "flight-api/internal/repository/airport"
 	service_airport "flight-api/internal/service/airport"
@@ -12,6 +13,7 @@ import (
 	"flight-api/pkg/database"
 	"flight-api/pkg/httpserver"
 	"flight-api/pkg/logger"
+	"flight-api/pkg/redis"
 	"flight-api/util"
 	"os"
 	"os/signal"
@@ -48,15 +50,30 @@ func main() {
 	}
 	defer db.Close()
 
+	// Connect to Redis (if enabled)
+	logger.Info("Connecting to Redis ...")
+	redisClient, err := redis.NewRedisClient(cfg.RedisEnable, cfg.RedisURL)
+	if err != nil {
+		logger.Fatalw(logrus.Fields{
+			"error": err,
+		}, "Failed to connect to Redis")
+	} else if cfg.RedisEnable {
+		logger.Info("Successfully connected to Redis!")
+	}
+	defer redisClient.Close()
+
 	// Initialize validator
 	validate := util.NewValidator()
 
 	// Initialize repository
 	airportRepository := repo_airport.NewAirportRepository(logger)
 
+	// Initialize Cache
+	cache := cache.NewCache(logger, &cfg, redisClient)
+
 	// Initialize service
-	weatherService := service_weather.NewWeatherService(logger, &cfg)
-	airportService := service_airport.NewAirportService(logger, validate, db, airportRepository, weatherService)
+	weatherService := service_weather.NewWeatherService(logger, &cfg, cache)
+	airportService := service_airport.NewAirportService(logger, &cfg, validate, db, cache, airportRepository, weatherService)
 	aviationService := service_aviation.NewAviationService(logger, &cfg)
 	syncService := service_sync.NewSyncService(logger, validate, db, airportRepository, aviationService)
 
